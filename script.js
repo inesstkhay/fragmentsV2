@@ -2044,7 +2044,19 @@ if (sliderEl && sliderValueEl) {
     recomputePatternsAndRefreshViews();
 
     if (currentView === 'gallery')       showGalleryView();
-    else if (currentView === 'proxemic') showProxemicView();
+    else if (currentView === 'proxemic') {
+    const svg = d3.select("#proxemic-view svg");
+    const world = svg.select("g"); 
+    const oldTransform = world.attr("transform"); 
+
+    showProxemicView();
+
+    // Réappliquer la transformation précédente
+    const newSvg = d3.select("#proxemic-view svg");
+    const newWorld = newSvg.select("g");
+    if (oldTransform) newWorld.attr("transform", oldTransform);
+}
+
     else if (currentView === 'patterns-map') {
       renderPatternBaseGrey();
       refreshPatternsMap();
