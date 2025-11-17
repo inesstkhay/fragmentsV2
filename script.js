@@ -311,7 +311,7 @@ const ALL_FUZZY_KEYS = [
   "FS_P1_presenceinstitutionnelle",
   "FS_P1_intensitecontrole",
   "FS_P2_abandon",
-  "FS_P3_pressionfoncière"
+  "FS_P3_pressionfonciere"
 ];
 
 let ACTIVE_FUZZY_KEYS = new Set(ALL_FUZZY_KEYS); // par défaut : tout est actif
@@ -1446,7 +1446,8 @@ function showProxemicView() {
           const v = parseFuzzy(feature.properties[k]);
           if (v !== null) { sum += v; n++; }
         }
-        scores[subName] = n ? (sum / n) : 0;
+        scores[subName] = n ? (sum / n) : null;
+
       }
     }
     return scores;
@@ -1521,13 +1522,14 @@ function showProxemicView() {
   features.forEach(f => {
     const subScores = computeSubScores(f);
 
-    let bestSub = null, bestScore = 0;
-    Object.entries(subScores).forEach(([sub, val]) => {
-      if (val > bestScore) {
-        bestScore = val;
-        bestSub   = sub;
-      }
-    });
+    let bestSub = null, bestScore = -Infinity;
+Object.entries(subScores).forEach(([sub, val]) => {
+  if (val !== null && val > bestScore) {
+    bestScore = val;
+    bestSub = sub;
+  }
+});
+
 
     if (!bestSub) return;
 
