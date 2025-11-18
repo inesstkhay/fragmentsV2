@@ -1262,7 +1262,7 @@ const FUZZY_GROUPS = {
   ],
   FS: [
     "FS_P1_presenceinstitutionnelle","FS_P1_intensitecontrole",
-    "FS_P2_abandon","FS_P3_pressionfoncière"
+    "FS_P2_abandon","FS_P3_pressionfonciere"
   ]
 };
 
@@ -1390,7 +1390,7 @@ function showProxemicView() {
         "FS_P2_abandon"
       ],
       marche: [
-        "FS_P3_pressionfoncière"
+        "FS_P3_pressionfonciere"
       ]
     }
   };
