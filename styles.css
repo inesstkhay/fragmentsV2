@@ -16,18 +16,21 @@ body {
             height: 100%;
             z-index: 1; 
         }
-        #proxemic-view {
-            display: none;
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #000; 
-            z-index: 100; 
-            overflow: auto;
-            cursor: grab;
-        }
+        
+        
+        #proxemic-view,
+#fragment-proxemic-view {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000; 
+    z-index: 100; 
+    overflow: auto;
+    cursor: grab;
+}
 
         #filters {
             position: absolute;
@@ -174,6 +177,21 @@ input[type="range"] {
   height: 100%;
 }
 
+/* Sous-barre Fragments : même gabarit que Patterns/Unit, mais vide */
+#subnav-fragments{
+  position: absolute;
+  top: 38px;              /* juste sous .navbar (comme les autres) */
+  left: 0;
+  right: 0;
+  z-index: 1060;
+  background: #000;
+  border-bottom: 1px solid #4d4d4d;
+  padding: 6px 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+}
 
 
 /* La sous-barre Patterns, au-dessus de la carte aussi */
@@ -203,6 +221,41 @@ input[type="range"] {
   visibility: hidden;     /* hide buttons but keep bar height */
 }
 
+/* La sous-barre Unit, au-dessus de la carte aussi */
+/* Sub-bar: always visible under the main navbar */
+#subnav-unit {
+  position: absolute;
+  top: 38px;              /* just under the navbar */
+  left: 0;
+  right: 0;
+  z-index: 1060;
+  background: #000;
+  border-bottom: 1px solid #4d4d4d;
+  padding: 6px 10px;
+  display: flex;          /* always displayed */
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;       /* consistent height across views */
+}
+
+/* When not on “Patterns”, keep the bar but hide the controls */
+#subnav-unitsubnav--inactive {
+  pointer-events: none;   /* no interaction */
+}
+
+#subnav-unit.subnav--inactive .sub-tab,
+#subnav-unit.subnav--inactive .sub-action {
+  visibility: hidden;     /* hide buttons but keep bar height */
+}
+
+
+.subnav--inactive {
+  display: none !important;
+}
+
+#subnav-patterns { display: flex; align-items: center; gap: 8px; }
+#subnav-patterns .sub-action { margin-left: auto; } /* si tu veux actions à droite */
+#subnav-patterns .sub-action { display: inline-flex; }
 
 
 /* (optionnel) si ton bouton est sous la sous-barre, descends-le un peu */
@@ -292,29 +345,6 @@ input[type="range"] {
   overflow-wrap: anywhere;   /* titres longs -> retour à la ligne */
 }
 
-#gallery-view .photo-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;                 /* espace régulier entre vignettes */
-}
-
-#gallery-view .photo-cell {
-  position: relative;
-  aspect-ratio: 4 / 3;       /* vignettes homogènes */
-  border: 1px solid #444;
-  border-radius: 8px;
-  background: #111;
-  overflow: hidden;
-}
-
-#gallery-view .photo-cell img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;         /* recadre proprement */
-  display: block;
-  cursor: pointer;
-}
-
 
 /* Mode création d’unité : curseur précis sur la carte Patterns */
 .patterns-creating { cursor: crosshair !important; }
@@ -335,7 +365,7 @@ input[type="range"] {
 
 /* ===== Explicabilité locale (Pourquoi moi ?) ===== */
 
-/* ===== Panneau Pattern : alignement solide ===== */
+/* * ===== Panneau Pattern : alignement solide ===== */
 
 /* conteneur global des membres */
 .pattern-members{
@@ -351,22 +381,24 @@ input[type="range"] {
   grid-template-columns:70px minmax(0,1fr); /* << clé : 2e colonne peut rétrécir */
   gap:12px;
   padding:10px;
-  border:1px solid #2a2a2a;
+  border:1px solid #e6e6e6;     /* MODIF: bordure claire */
   border-radius:6px;
-  background:#0f0f0f;
-  box-sizing:border-box; /* pas de débordement à cause des bordures */
+  background:#fff;              /* MODIF: fond blanc */
+  box-sizing:border-box;        /* pas de débordement à cause des bordures */
 }
 
 .member-thumb{
   width:70px; height:55px;
-  border:1px solid #444; border-radius:4px;
-  background:#1a1a1a center/cover no-repeat;
+  border:1px solid #d6d6d6;     /* MODIF: bordure claire */
+  border-radius:4px;
+  background:#f2f2f2 center/cover no-repeat;  /* MODIF: fond clair */
 }
 
 .member-right{ display:flex; flex-direction:column; gap:6px; }
 
 .member-title{
-  font-weight:600; color:#fff; font-size:14px; line-height:1.2;
+  font-weight:600; color:#000000;  /* MODIF: texte noir */
+  font-size:14px; line-height:1.2;
 }
 
 /* lignes Partagés / Manquants / Différents */
@@ -379,8 +411,10 @@ input[type="range"] {
 
 /* label à gauche, bien calé */
 .crit-label{
-  font-size:12px; color:#bbb; line-height:20px;
-  white-space:nowrap; text-align:right;
+  font-size:12px;
+  color:#444;                   /* MODIF: gris foncé lisible sur blanc */
+  line-height:20px;
+  white-space:nowrap; 
 }
 
 /* zone badges (la 2e colonne) : force le wrap et empêche les débords */
@@ -388,10 +422,10 @@ input[type="range"] {
   min-width:0;                 /* la colonne peut se comprimer */
   display:flex;
   flex-wrap:wrap;              /* les badges passent à la ligne suivante */
-  gap:6px 6px;
+  gap:12px 50px;
 }
 
-/* badges */
+/* badges (si tu les utilises ailleurs) */
 .crit-badge{
   display:inline-block;
   padding:2px 6px;
@@ -412,6 +446,23 @@ input[type="range"] {
 .badge-different { background:#3a0f12; color:#ffd9dd; border-color:#5a1a1f; }
 
 .crit-empty{ color:#808080; font-style:italic; }
+
+/* MODIF: scores des critères (classe utilisée par ton JS : .crit-value)
+   -> pas de contour, pas de badge, texte noir */
+.crit-value{
+  display: inline-block;   /* ou block si tu préfères */
+  min-width: 3ch;          /* optionnel: évite que ça “saute” */
+  text-align: right;       /* <- alignement à droite */
+
+  background:transparent;
+  border:none;
+  box-shadow:none;
+  padding:0;
+  border-radius:0;
+  color:#000;
+  font-size:13px;
+  line-height:20px;
+}
 
 /* petits affinages pour éviter les micro-décalages */
 #tabbed-sidebar, #tabbed-sidebar-content, .member-row, .crit-row{ overflow:hidden; }
@@ -684,129 +735,9 @@ input[type="range"] {
   color: #ffb0b0;
 }
 
-/*==================================================
-=      Pour une cohérence visuelle générale        =
-==================================================*/
-.pattern-members .member-row {
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-}
-
-.pattern-members .member-title {
-  font-weight: 600;
-  color: #fff;
-}
-
-.pattern-members .crit-row .crit-label {
-  font-weight: 500;
-  color: #ccc;
-}
-
-/*********************************************
- *   PATTERN PANEL — STYLE MINIMALISTE
- *********************************************/
-
-.pattern-meta {
-  margin: 6px 0 14px;
-  font-size: 13px;
-  color: #777;
-  font-family: "Consolas", monospace;
-}
-
-/* ----- Section “Critères communs” ----- */
-.pattern-crit-block {
-  margin: 18px 0;
-  padding: 12px;
-  border: 1px solid #ddd;
-  background: #fafafa;
-  border-radius: 4px;
-}
-
-.pattern-crit-block h3 {
-  margin: 0 0 10px;
-  font-size: 14px;
-  font-weight: 600;
-  font-family: "Consolas", monospace;
-}
-
-/* Une ligne par critère */
-.crit-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 0;
-  border-bottom: 1px dashed #ddd;
-}
-
-.crit-row:last-child {
-  border-bottom: none;
-}
-
-.crit-label {
-  font-size: 12px;
-  color: #222;
-  max-width: 200px;
-  font-family: "Consolas", monospace;
-}
-
-.crit-value {
-  font-family: "Consolas", monospace;
-  font-size: 12px;
-  color: #000;
-  background: #e5e5e5;
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-
-/*********************************************
- *     LISTE DES MEMBRES DU PATTERN
- *********************************************/
-
-.pattern-members {
-  margin-top: 24px;
-}
-
-.pattern-members h3 {
-  margin: 0 0 10px;
-  font-size: 14px;
-  font-family: "Consolas", monospace;
-}
-
-/* Container d’un membre */
-.member-row {
-  display: flex;
-  gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px solid #eee;
-  cursor: pointer;
-}
 
 
-/* Image miniature du fragment */
-.member-thumb {
-  width: 48px;
-  height: 48px;
-  background-size: cover;
-  background-position: center;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
 
-/* Texte à droite de la miniature */
-.member-right {
-  flex: 1;
-}
-
-.member-title {
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 4px;
-  font-family: "Consolas", monospace;
-}
-
-.member-info {
-  font-size: 12px;
-  color: #444;
-  font-family: "Consolas", monospace;
-}
 
 /*********************************************
  *     ACTIONS EN BAS DU PANEL
@@ -852,4 +783,287 @@ input[type="range"] {
 .frag:hover {
   stroke:#ff0;
   stroke-width:2px;
+}
+
+
+
+
+
+
+
+.diff-tooltip{
+  background: rgba(0,0,0,0.92);
+  color: #fff;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.25;
+  max-width: 340px;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.35);
+}
+
+.diff-tooltip .dt-title{
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.diff-tooltip .dt-sub,
+.diff-tooltip .dt-sub2{
+  color: rgba(255,255,255,0.85);
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.diff-tooltip .dt-list-title{
+  margin-top: 8px;
+  font-weight: 700;
+  font-size: 11px;
+  color: rgba(255,255,255,0.9);
+}
+
+.diff-tooltip ul{
+  margin: 6px 0 0 16px;
+  padding: 0;
+}
+
+.diff-tooltip li{
+  margin: 3px 0;
+}
+
+.diff-tooltip .k{ font-weight: 700; }
+.diff-tooltip .v{ font-weight: 600; }
+.diff-tooltip .d{ color: rgba(255,255,255,0.75); margin-left: 6px; }
+
+
+
+
+
+#buildings-style-box{
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#buildings-style-box label{
+  cursor: pointer;
+  user-select: none;
+}
+
+
+
+
+/* ===== GALERIE TABLEAU PAR AGENCEMENT ===== */
+
+#gallery-view .gallery-wrapper {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+  box-sizing: border-box;
+}
+
+#gallery-view .pattern-block {
+  padding: 18px 0 34px;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+#gallery-view .pattern-title {
+  margin: 0 0 16px;
+  font-weight: 700;
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+#gallery-view .gallery-table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-x: auto;
+}
+
+#gallery-view .gallery-head,
+#gallery-view .gallery-row,
+#gallery-view .gallery-buildings-row {
+  display: grid;
+  gap: 12px;
+  align-items: start;
+}
+
+#gallery-view .gallery-head-cell,
+#gallery-view .gallery-cell,
+#gallery-view .gallery-buildings-wrap {
+  min-width: 0;
+}
+
+#gallery-view .gallery-head-cell {
+  background: #111;
+  color: #fff;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+}
+
+#gallery-view .gallery-cell.is-empty {
+  min-height: 220px;
+  border: 1px dashed #ccc;
+  border-radius: 8px;
+  background: #f7f7f7;
+}
+
+#gallery-view .gallery-fragment-card {
+  border: 1px solid #d7d7d7;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  cursor: pointer;
+}
+
+#gallery-view .gallery-fragment-media {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #efefef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#gallery-view .gallery-fragment-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+#gallery-view .gallery-fragment-media.is-empty {
+  color: #888;
+  font-size: 12px;
+}
+
+#gallery-view .gallery-fragment-caption {
+  padding: 10px;
+}
+
+#gallery-view .gallery-fragment-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 4px;
+}
+
+#gallery-view .gallery-fragment-name {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #444;
+}
+
+#gallery-view .gallery-buildings-cell {
+  border: 1px solid #d7d7d7;
+  border-radius: 8px;
+  background: #fafafa;
+  padding: 10px;
+  min-height: 110px;
+}
+
+#gallery-view .gallery-buildings-title {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #111;
+}
+
+#gallery-view .gallery-buildings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#gallery-view .gallery-building-line {
+  font-size: 11px;
+  line-height: 1.35;
+  color: #444;
+  word-break: break-word;
+}
+
+#gallery-view .gallery-building-line.is-empty {
+  color: #888;
+}
+
+@media (max-width: 900px) {
+  #gallery-view .gallery-head-cell,
+  #gallery-view .gallery-cell,
+  #gallery-view .gallery-buildings-wrap {
+    min-width: 220px;
+  }
+}
+
+
+.gallery-cell {
+  min-height: 260px;
+}
+
+.gallery-cell.is-empty {
+  opacity: 0.18;
+}
+
+.gallery-fragment-card {
+  height: 100%;
+}
+
+.gallery-cell.is-empty::after {
+  content: "";
+  display: block;
+  height: 100%;
+  border: 1px dashed rgba(255,255,255,0.08);
+  border-radius: 8px;
+}
+
+
+
+
+.fragment-time-controls {
+  position: absolute;
+  left: 10px;
+  bottom: 40px; /* plus haut qu’avant */
+  z-index: 1050;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.fragment-time-btn {
+  background: #000;
+  color: #fff;
+  border: 1px solid #fff;
+  padding: 10px;
+  cursor: pointer;
+  font-family: 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.fragment-time-btn:hover {
+  background: #111;
+}
+
+.fragment-time-btn.active {
+  background: #fff;
+  color: #000;
+  border: 1px solid #000;
+}
+
+.fragment-time-legend {
+  position: absolute;
+  left: 10px;
+  bottom: 80px; /* remonte la légende avec les boutons */
+  z-index: 1050;
+  background: #fff;
+  color: #000;
+  border: 1px solid #ccc;
+  padding: 8px 10px;
+  font-size: 12px;
+  display: none;
+  font-family: 'Consolas', monospace;
 }

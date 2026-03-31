@@ -1,81 +1,1265 @@
+
 /***************************************************
- * backdoorurbanism — script.js 
+ * backdoorurbanism — script.js
  ***************************************************/
+/* ==================================================
+   0) CONFIGURATION GÉNÉRALE
+   Paramètres fixes du site :
+   - coordonnées de départ
+   - seuils de calcul
+   - listes de critères
+   - couleurs
+   Ces valeurs peuvent être ajustées sans modifier
+   la structure du reste du code.
+================================================== */
+/* ==================================================
+   ÉTAT GLOBAL — VUES ET LOCALISATION
+================================================== */
 
-/*---------------------------------------
-  1) BOUTON : TOGGLE LÉGENDE
----------------------------------------*/
-document.getElementById('toggle-legend-btn').addEventListener('click', () => {
-  const legend = document.getElementById('criteria-legend');
-  legend.style.display = (legend.style.display === 'none' || legend.style.display === '') ? 'block' : 'none';
-});
 
-
-/*---------------------------------------
-  2) CONSTANTES / ÉTAT GLOBAL / DOM
----------------------------------------*/
-let currentView = 'map';                   // vue active globale
 const montreuilView = [48.8710, 2.4330];
 const montreuilZoom = 15;
-const toulouseView  = [43.5675824, 1.4000176];
-const toulouseZoom  = 15;
-let currentLocation = 'montreuil';         // localisation initiale
-let patternsVersion = 0;                   // (NOTE: compteur; non utilisé ailleurs)
 
-// Références DOM fréquentes
-const proxemicView  = document.getElementById('proxemic-view');
+const toulouseView = [43.5675824, 1.4000176];
+const toulouseZoom = 15;
 
-// État de données
-let allLayers      = [];   // toutes couches cliquables (fragments & discours)
-let dataGeojson    = [];   // fragments Montreuil
-let datamGeojson   = [];   // fragments Mirail
-let patterns       = {};   // { P1: {name,elements[],criteria{}}, ... }
-let patternNames   = {};   // { P1:'P1', ... } (alias si besoin)
-let discoursLayer  = null; // couche de points "discours" (pane dédié)
-let combinedFeatures = []; // concat Montreuil + Mirail (utile patterns-map)
 
-// Panne "discours" au-dessus
+/* ==================================================
+   PARAMÈTRES DU MOTEUR PATTERNS / AGENCEMENTS
+================================================== */
+
+let PERIMETER_DIAMETER_M = 100;
+let AG_SIM_THRESHOLD = 0.60;
+
+let MIN_AG_FRAGMENTS = 2;
+let ALLOW_SINGLE_FRAGMENT_WITH_BUILDINGS = true;
+let MIN_BUILDINGS_FOR_SINGLE_FRAGMENT = 1;
+let MAX_AG_OVERLAP = 0.05;
+let MIN_PATTERN_OCCURRENCES = 2;
+let RARE_MOTIF_BOOST = 0.35;
+let SHARED_NULL_WEIGHT = 1;
+let COUNT_SHARED_NULL_IN_NUMERIC_SIM = true;
+
+/* ==================================================
+   PARAMÈTRES DE COMPARAISON temporalites
+================================================== */
+
+let AG_WEIGHT_SNUM = 0.20;
+let AG_WEIGHT_SMOTIFS = 0.55;
+let AG_WEIGHT_STEMPORALITES = 0.25;
+
+let TEMPORAL_STATUS_PENALTY = 0.60;   // pénalité forte si statuts différents
+let TEMPORAL_APP_DIS_STRICT = true;   // apparu ≠ disparu, toujours distincts
+let TEMPORAL_MIN_MATCH_SCORE = 0.05;  // évite les appariements “zéro absolu”
+
+/* ==================================================
+   PARAMÈTRES DE COMPARAISON FUZZY
+================================================== */
+
+let SIM_THRESHOLD = 0.75;
+let COMP_THRESHOLD = 0.60;
+
+let MIN_COMMON_NON_NULL = 3;
+let MAX_NULL_MISMATCH_RATIO = 0.20;
+
+/* ==================================================
+   COULEURS POUR LES FONCTIONS DE BÂTIMENTS
+================================================== */
+
+const BUILDING_FUNCTION_COLORS = {
+  logement: 'rgba(255, 255, 255, 0.80)',
+  commerce: 'rgba(255, 182, 182, 0.35)',
+  équipement: 'rgba(183, 251, 208, 0.35)',
+  associatif: 'rgba(141, 181, 250, 0.35)',
+  santé: 'rgba(237, 250, 141, 0.35)',
+  culte: 'rgba(235, 141, 250, 0.35)',
+  parking: 'rgba(73, 73, 73, 0.42)',
+  industriel: 'rgba(255, 190, 130, 0.35)',
+  scolaire: 'rgba(230,200,255,0.35)',
+  autre: 'rgba(210,210,210,0.28)',
+  mixte: 'rgba(210,210,210,0.28)'
+};
+
+
+/* ==================================================
+   CLES FUZZY ET TEXTUELLES
+================================================== */
+
+const ALL_FUZZY_KEYS = [
+  // Pratiques actives
+  "PA_P1_intensitesoin",
+  "PA_P1_frequencegestes",
+  "PA_P1_degrecooperation",
+
+  "PA_P2_degretransformation",
+  "PA_P2_perrenite",
+  "PA_P2_autonomie",
+
+  "PA_P3_intensiteusage",
+  "PA_P3_frequenceusage",
+  "PA_P3_diversitepublic",
+  "PA_P3_conflitusage",
+
+  // Dynamiques hybrides
+  "DH_P1_degreinformalite",
+  "DH_P1_echellepratique",
+  "DH_P1_degremutualisation",
+
+  "DH_P2_degréorganisation",
+  "DH_P2_porteepolitique",
+  "DH_P2_effetspatial",
+
+  "DH_P3_attachement",
+  "DH_P4_intensiteflux",
+
+  // Forces structurantes
+  "FS_P1_presenceinstitutionnelle",
+  "FS_P1_intensitecontrole",
+  "FS_P2_abandon",
+  "FS_P3_pressionfonciere"
+];
+
+const TEXT_KEYS = [
+  "usages",
+  "acteur_actif",
+  "initiateur",
+  "elements_spatiaux"
+];
+
+const ALL_CRITERIA_KEYS = [
+  ...ALL_FUZZY_KEYS,
+  ...TEXT_KEYS
+];
+
+
+const FUZZY_GROUPS = {
+  PA: [
+    "PA_P1_intensitesoin",
+    "PA_P1_frequencegestes",
+    "PA_P1_degrecooperation",
+    "PA_P2_degretransformation",
+    "PA_P2_perrenite",
+    "PA_P2_autonomie",
+    "PA_P3_intensiteusage",
+    "PA_P3_frequenceusage",
+    "PA_P3_diversitepublic",
+    "PA_P3_conflitusage"
+  ],
+  DH: [
+    "DH_P1_degreinformalite",
+    "DH_P1_echellepratique",
+    "DH_P1_degremutualisation",
+    "DH_P2_degréorganisation",
+    "DH_P2_porteepolitique",
+    "DH_P2_effetspatial",
+    "DH_P3_attachement",
+    "DH_P4_intensiteflux"
+  ],
+  FS: [
+    "FS_P1_presenceinstitutionnelle",
+    "FS_P1_intensitecontrole",
+    "FS_P2_abandon",
+    "FS_P3_pressionfonciere"
+  ]
+};
+
+
+/* ==================================================
+   SATURATION ET LUMINOSITÉ DES COULEURS DE PATTERNS
+================================================== */
+
+const SAT_SEQ = [95, 85, 90, 80];
+const LIT_SEQ = [58, 70, 50, 64];
+
+
+
+
+/* ==================================================
+   1) ÉTAT GLOBAL DE L’APPLICATION
+   Variables vivantes du site :
+   - vue active
+   - données chargées
+   - résultats calculés
+   - références de cartes, couches et modales
+   Ce bloc centralise ce qui change pendant l’usage.
+================================================== */
+
+/* ==================================================
+   ÉTAT GLOBAL — DONNÉES CALCULÉES
+================================================== */
+
+
+let currentView = 'map';
+let currentLocation = 'montreuil';
+
+let currentFragmentSub = 'map';
+let currentUnitSub = 'map';
+
+let SHOW_DIFFRACTIONS = false;
+
+let agencements = [];
+let agencementPatterns = {};
+let fragmentToPatternIds = new Map();
+let agencementsById = new Map();
+
+let patterns = {};
+let patternNames = {};
+let combinedFeatures = [];
+
+let allLayers = [];
+let dataGeojson = [];
+let datamGeojson = [];
+
+let batimentsMontreuilGeojson = [];
+let batimentsToulouseGeojson = [];
+
+/* temporalités */
+
+let dataGeojsonT1 = [];
+let dataGeojsonT2 = [];
+let datamGeojsonT1 = [];
+let datamGeojsonT2 = [];
+
+let currentFragmentTimeMode = 'T1';
+let currentPatternGalleryTimeMode = 'T1';
+
+let fragmentTemporalControl = null;
+let fragmentTrajectoryLegend = null;
+
+let fragmentLayersGroup = null;
+
+let temporalFragmentIndex = {
+  montreuil: new Map(),
+  mirail: new Map()
+};
+
+
+/* ==================================================
+   ÉTAT GLOBAL — BÂTIMENTS
+================================================== */
+
+let BUILDINGS_STYLE_MODE = 'etat';
+
+
+let batimentsLayerMontreuil = null;
+let batimentsLayerToulouse = null;
+let patternBuildingsLayer = null;
+let unitBuildingsLayer = null;
+
+
+/* ==================================================
+   ÉTAT GLOBAL — UNITÉ DE PROJET
+================================================== */
+
+let unitCreation = {
+  active: false,
+  mode: null,
+  ringsVisible: true,
+  mouseMoveHandler: null
+};
+
+let unitMap = null;
+let unitLayerGroup = null;
+let unitContextGroup = null;
+let unitPatternGroup = null;
+let unitContext = null;
+
+let discoursLayer = null;
+
+let patternMap = null;
+let patternBaseLayer = null;        // fragments gris
+let patternOverlayGroup = null;     // anneaux colorés
+let patternPanes = new Map();       // pane par anneau
+
+let activeViewer = null;
+let activeFragmentId = null;
+
+
+/* ========== MODALE UNITÉ (plein écran) ========== */
+let unitModalState = {
+  unit: null,
+  singleViewer: null,
+  v1Viewer: null,
+  v2Viewer: null,
+};
+
+
+let __imgObserver = null;
+
+/* ==================================================
+   RÉFÉRENCES DOM FRÉQUENTES
+================================================== */
+
+const proxemicView = document.getElementById('proxemic-view');
+const fragmentProxemicView = document.getElementById('fragment-proxemic-view');
+
+
+/* ==================================================
+   CARTE PRINCIPALE — INITIALISATION
+================================================== */
+
 let map = L.map('map').setView(montreuilView, montreuilZoom);
-map.createPane('pane-discours');
-map.getPane('pane-discours').style.zIndex = 650; // > autres couches
+/* layer fragment pour la temporalité */
+fragmentLayersGroup = L.layerGroup().addTo(map);
 
-// Fond de carte (dark)
+map.createPane('pane-discours');
+map.getPane('pane-discours').style.zIndex = 650;
+
+map.createPane('pane-batiments');
+map.getPane('pane-batiments').style.zIndex = 300;
+
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
   attribution: '© OpenStreetMap contributors, © CartoDB'
 }).addTo(map);
 
-/*---------------------------------------
-ÉTAT CRÉATION D’UNITÉ (patterns-map)
-  (la logique détaillée arrive en Partie 2)
----------------------------------------*/
-let unitCreation = {
-  active: false,
-  ringsVisible: true,
-  mouseMoveHandler: null
-};
-let unitMap = null;             // carte dédiée "Unité de projet" (Partie 2)
-let unitLayerGroup = null;      // toutes les unités dessinées
-let unitContextGroup = null;    // contexte (contours, base grise, etc.)
+
+
+/* ==================================================
+   CRITÈRES — LISTES DE CLÉS
+================================================== */
+
+
+let ACTIVE_CRITERIA_KEYS = new Set(ALL_CRITERIA_KEYS);
 
 
 
-/* ------------ Helpers images : nettoyage & création d'<img> ------------- */
+
+/* ==================================================
+   COULEURS DES PATTERNS
+================================================== */
+
+
+const PATTERN_COLORS = Object.fromEntries(
+  Array.from({ length: 100 }, (_, i) => {
+    const hue = Math.round((i * 137.508) % 360);
+    const sat = SAT_SEQ[i % SAT_SEQ.length];
+    const lit = LIT_SEQ[(Math.floor(i / 4)) % LIT_SEQ.length];
+    return [`P${i + 1}`, `hsl(${hue}, ${sat}%, ${lit}%)`];
+  })
+);
+
+
+
+
+
+/* ==================================================
+   3) HELPERS GÉNÉRAUX
+   Petites fonctions utilitaires réutilisées partout.
+   Elles ne pilotent pas l’interface directement :
+   elles transforment, calculent ou normalisent.
+================================================== */
+
+/* ==================================================
+   HELPERS — TEXTE ET NORMALISATION
+================================================== */
+
+function normStr(v) {
+  return String(v ?? '').trim().toLowerCase();
+}
+
+function normalizeToken(t) {
+  return String(t || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/[’']/g, "'")
+    .replace(/^\-+|\-+$/g, '');
+}
+
+function parseMultiText(v) {
+  if (v === "-" || v === "" || v === null || v === undefined) return null;
+
+  const raw = String(v)
+    .split(/[;,]/)
+    .map(s => normalizeToken(s))
+    .filter(Boolean);
+
+  if (!raw.length) return null;
+
+  const banned = new Set(["aucun", "aucune", "none", "na", "n/a", "null"]);
+  const cleaned = raw.filter(tok => !banned.has(tok));
+
+  return cleaned.length ? cleaned : null;
+}
+
+function prettyKey(k) {
+  return String(k).replace(/_/g, " ");
+}
+
+function fmtFuzzy(v) {
+  return (v === null || v === undefined) ? "—" : Number(v).toFixed(2);
+}
+
+function fmtAny(v) {
+  if (v === null || v === undefined) return "—";
+
+  if (Array.isArray(v)) {
+    if (v.length === 0) return "—";
+    const short = v.slice(0, 4).join(", ");
+    return (v.length > 4) ? (short + "…") : short;
+  }
+
+  return fmtFuzzy(v);
+}
+
+
+/* ==================================================
+   HELPERS — FUZZY ET CRITÈRES
+================================================== */
+
+function parseFuzzy(v) {
+  if (
+    v === "-" ||
+    v === "" ||
+    v === null ||
+    v === undefined ||
+    v === "null" ||
+    v === "NaN"
+  ) {
+    return null;
+  }
+
+  const num = parseFloat(String(v).replace(",", "."));
+  if (!Number.isFinite(num)) return null;
+
+  return num;
+}
+
+function isSharedNull(a, b) {
+  return a === null && b === null;
+}
+
+function isNonNull(v) {
+  return v !== null && v !== undefined;
+}
+
+function featureToVector(feature) {
+  const props = feature.properties || {};
+
+  return ALL_CRITERIA_KEYS.map(k => {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return null;
+
+    if (TEXT_KEYS.includes(k)) {
+      return parseMultiText(props[k]);
+    }
+
+    return parseFuzzy(props[k]);
+  });
+}
+
+function similarityFuzzy(vec1, vec2) {
+  let sum = 0;
+  let count = 0;
+
+  for (let i = 0; i < vec1.length; i++) {
+    const a = vec1[i];
+    const b = vec2[i];
+
+    if (a === null && b === null) continue;
+
+    let dist;
+
+    if (a === null || b === null) {
+      dist = 1;
+    } else if (Array.isArray(a) && Array.isArray(b)) {
+      const sim = jaccardSimilarity(a, b);
+      dist = 1 - sim;
+    } else {
+      dist = Math.abs(a - b);
+    }
+
+    sum += dist;
+    count++;
+  }
+
+  if (count === 0) return 0;
+  return 1 - (sum / count);
+}
+
+function jaccardSimilarity(listA, listB) {
+  const A = new Set(listA || []);
+  const B = new Set(listB || []);
+  if (!A.size && !B.size) return 0;
+
+  let inter = 0;
+  for (const x of A) {
+    if (B.has(x)) inter++;
+  }
+
+  const uni = A.size + B.size - inter;
+  return uni ? (inter / uni) : 0;
+}
+
+function comparabilityStats(vec1, vec2) {
+  let inter = 0;
+  let uni = 0;
+  let mismatch = 0;
+
+  for (let i = 0; i < vec1.length; i++) {
+    const aNN = (vec1[i] !== null);
+    const bNN = (vec2[i] !== null);
+
+    if (aNN || bNN) uni++;
+    if (aNN && bNN) inter++;
+    if (aNN !== bNN) mismatch++;
+  }
+
+  return {
+    inter,
+    uni,
+    mismatch,
+    jaccard: (uni === 0) ? 0 : (inter / uni)
+  };
+}
+
+function distanceCommonNonNull(vec1, vec2) {
+  let sum = 0;
+  let count = 0;
+
+  for (let i = 0; i < vec1.length; i++) {
+    const a = vec1[i];
+    const b = vec2[i];
+    if (a === null || b === null) continue;
+
+    sum += Math.abs(a - b);
+    count++;
+  }
+
+  return count ? (sum / count) : null;
+}
+
+function oppositionFuzzy(vec1, vec2) {
+  const st = comparabilityStats(vec1, vec2);
+
+  if (st.uni === 0) {
+    return {
+      valid: false,
+      comparability: 0,
+      opposition: null,
+      common: 0,
+      mismatch: 0
+    };
+  }
+
+  if (st.jaccard < COMP_THRESHOLD) {
+    return {
+      valid: false,
+      comparability: st.jaccard,
+      opposition: null,
+      common: st.inter,
+      mismatch: st.mismatch
+    };
+  }
+
+  if ((st.mismatch / st.uni) > MAX_NULL_MISMATCH_RATIO) {
+    return {
+      valid: false,
+      comparability: st.jaccard,
+      opposition: null,
+      common: st.inter,
+      mismatch: st.mismatch
+    };
+  }
+
+  if (st.inter < MIN_COMMON_NON_NULL) {
+    return {
+      valid: false,
+      comparability: st.jaccard,
+      opposition: null,
+      common: st.inter,
+      mismatch: st.mismatch
+    };
+  }
+
+  const dist = distanceCommonNonNull(vec1, vec2);
+  if (dist === null) {
+    return {
+      valid: false,
+      comparability: st.jaccard,
+      opposition: null,
+      common: st.inter,
+      mismatch: st.mismatch
+    };
+  }
+
+  return {
+    valid: true,
+    comparability: st.jaccard,
+    opposition: dist,
+    common: st.inter,
+    mismatch: st.mismatch
+  };
+}
+
+function topVectorDifferences(vecA, vecB, { topN = 3 } = {}) {
+  const diffs = [];
+
+  for (let i = 0; i < ALL_CRITERIA_KEYS.length; i++) {
+    const k = ALL_CRITERIA_KEYS[i];
+    const a = vecA[i];
+    const b = vecB[i];
+
+    if (a === null && b === null) continue;
+
+    if (a === null || b === null) {
+      diffs.push({
+        key: k,
+        a,
+        b,
+        diff: 1,
+        kind: "mismatch"
+      });
+      continue;
+    }
+
+    if (Array.isArray(a) && Array.isArray(b)) {
+      const sim = jaccardSimilarity(a, b);
+      const d = 1 - sim;
+      diffs.push({
+        key: k,
+        a,
+        b,
+        diff: d,
+        kind: "text"
+      });
+      continue;
+    }
+
+    const d = Math.abs(a - b);
+    diffs.push({
+      key: k,
+      a,
+      b,
+      diff: d,
+      kind: "common"
+    });
+  }
+
+  diffs.sort((x, y) => {
+    if (y.diff !== x.diff) return y.diff - x.diff;
+
+    if (x.kind !== y.kind) {
+      if (x.kind === "mismatch") return -1;
+      if (y.kind === "mismatch") return 1;
+    }
+
+    return x.key.localeCompare(y.key);
+  });
+
+  return diffs.slice(0, Math.max(1, topN));
+}
+
+
+/* ==================================================
+   HELPERS — GÉOMÉTRIE
+================================================== */
+
+function getFeatureCenterLatLng(feature) {
+  if (!feature) return null;
+  if (feature.__centerLatLng) return feature.__centerLatLng;
+
+  const geom = feature.geometry;
+  if (!geom) return null;
+
+  const t = geom.type;
+  const c = geom.coordinates;
+
+  if (t === "Point") {
+    const ll = L.latLng(c[1], c[0]);
+    feature.__centerLatLng = ll;
+    return ll;
+  }
+
+  if (t === "MultiPoint") {
+    const ll = centroidFromCoordList(c);
+    feature.__centerLatLng = ll;
+    return ll;
+  }
+
+  if (t === "LineString") {
+    const ll = centroidFromCoordList(c);
+    feature.__centerLatLng = ll;
+    return ll;
+  }
+
+  if (t === "MultiLineString") {
+    const flat = c.flat(1);
+    const ll = centroidFromCoordList(flat);
+    feature.__centerLatLng = ll;
+    return ll;
+  }
+
+  if (t === "Polygon") {
+    const ring = Array.isArray(c[0]) ? c[0] : [];
+    const ll = centroidFromCoordList(ring);
+    feature.__centerLatLng = ll;
+    return ll;
+  }
+
+  if (t === "MultiPolygon") {
+    const flat = [];
+    for (const poly of c) {
+      const ring = Array.isArray(poly?.[0]) ? poly[0] : [];
+      for (const pt of ring) flat.push(pt);
+    }
+    const ll = centroidFromCoordList(flat);
+    feature.__centerLatLng = ll;
+    return ll;
+  }
+
+  return null;
+}
+
+function centroidFromCoordList(coordList) {
+  if (!Array.isArray(coordList) || coordList.length === 0) return null;
+
+  let sumLng = 0;
+  let sumLat = 0;
+  let n = 0;
+
+  for (const pt of coordList) {
+    if (!pt || pt.length < 2) continue;
+
+    const lng = Number(pt[0]);
+    const lat = Number(pt[1]);
+
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue;
+
+    sumLng += lng;
+    sumLat += lat;
+    n++;
+  }
+
+  if (!n) return null;
+  return L.latLng(sumLat / n, sumLng / n);
+}
+
+function distanceMeters(a, b) {
+  if (!a || !b) return Infinity;
+
+  try {
+    if (map && typeof map.distance === "function") {
+      return map.distance(a, b);
+    }
+  } catch (e) {}
+
+  const R = 6371000;
+  const lat1 = a.lat * Math.PI / 180;
+  const lat2 = b.lat * Math.PI / 180;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+function featureWithinRadius(feature, centerLatLng, radiusM) {
+  const ll = getFeatureCenterLatLng(feature);
+  if (!ll) return false;
+  return distanceMeters(ll, centerLatLng) <= radiusM;
+}
+
+function getFeatureCenter(feature) {
+  if (feature.geometry?.type === 'Point') {
+    const c = feature.geometry.coordinates;
+    return L.latLng(c[1], c[0]);
+  }
+
+  const tmp = L.geoJSON(feature);
+
+  try {
+    return tmp.getBounds().getCenter();
+  } catch (e) {
+    const c = (
+      feature.geometry &&
+      feature.geometry.coordinates &&
+      feature.geometry.coordinates[0]
+    ) || [0, 0];
+
+    return L.latLng(c[1] || 0, c[0] || 0);
+  }
+}
+
+
+
+
+
+/* ==================================================
+   HELPERS — temporalités
+================================================== */
+
+
+function cleanFragmentId(id) {
+  return String(id || '').trim().toUpperCase();
+}
+
+function getSiteColor(zone) {
+  return zone === 'mirail' ? 'blue' : 'red';
+}
+
+function getTemporalDatasetsForCurrentMode() {
+  if (currentFragmentTimeMode === 'T2') {
+    return {
+      montreuil: dataGeojsonT2,
+      mirail: datamGeojsonT2
+    };
+  }
+
+  return {
+    montreuil: dataGeojsonT1,
+    mirail: datamGeojsonT1
+  };
+}
+
+function getCurrentFragmentDatasets() {
+  return getTemporalDatasetsForCurrentMode();
+}
+
+function buildTemporalPairsForZone(zone) {
+  const t1 = zone === 'montreuil' ? (dataGeojsonT1 || []) : (datamGeojsonT1 || []);
+  const t2 = zone === 'montreuil' ? (dataGeojsonT2 || []) : (datamGeojsonT2 || []);
+
+  const map1 = new Map(t1.map(f => [cleanFragmentId(f.properties?.id), f]));
+  const map2 = new Map(t2.map(f => [cleanFragmentId(f.properties?.id), f]));
+
+  const ids = new Set([...map1.keys(), ...map2.keys()]);
+  const out = [];
+
+  ids.forEach(id => {
+    const f1 = map1.get(id) || null;
+    const f2 = map2.get(id) || null;
+
+    let status = 'identical';
+    if (!f1 && f2) status = 'appeared';
+    else if (f1 && !f2) status = 'disappeared';
+    else if (f1 && f2) {
+      const changed = hasFragmentChangedBetweenT1T2(f1, f2);
+      status = changed ? 'modified' : 'identical';
+    }
+
+    out.push({ id, zone, t1: f1, t2: f2, status });
+  });
+
+  return out;
+}
+
+function hasFragmentChangedBetweenT1T2(f1, f2) {
+  if (!f1 || !f2) return true;
+
+  const p1 = f1.properties || {};
+  const p2 = f2.properties || {};
+
+  const keysToCompare = [
+    'name',
+    'description',
+    'usages',
+    'acteur_actif',
+    'initiateur',
+    'elements_spatiaux',
+    ...ALL_FUZZY_KEYS
+  ];
+
+  for (const k of keysToCompare) {
+    const a = String(p1[k] ?? '').trim();
+    const b = String(p2[k] ?? '').trim();
+    if (a !== b) return true;
+  }
+
+  return !areGeometriesEquivalent(f1.geometry, f2.geometry);
+}
+
+function areGeometriesEquivalent(g1, g2) {
+  try {
+    return JSON.stringify(g1 || null) === JSON.stringify(g2 || null);
+  } catch (e) {
+    return false;
+  }
+}
+
+
+
+function getSiteTemporalPalette(zone) {
+  if (zone === 'mirail') {
+    return {
+      pale: '#9ec5ff',
+      base: '#0000ff',
+      dark: '#000075'
+    };
+  }
+
+  return {
+    pale: '#ffb0b0',
+    base: '#ff0000',
+    dark: '#780101'
+  };
+}
+
+
+function getTrajectoryStyle(status, zone) {
+  const palette = getSiteTemporalPalette(zone);
+
+  if (status === 'identical') {
+    return {
+      color: palette.base,
+      weight: 1.2,
+      opacity: 0.95,
+      fillColor: palette.base,
+      fillOpacity: 0.3,
+      radius: 4
+    };
+  }
+
+  if (status === 'modified') {
+    return {
+      color: palette.pale,
+      weight: 1.2,
+      opacity: 1,
+      fillColor: palette.pale,
+      fillOpacity: 0.5,
+      radius: 4
+    };
+  }
+
+  if (status === 'appeared') {
+    return {
+      color: palette.dark,
+      weight: 1.5,
+      opacity: 1,
+      fillColor: palette.dark,
+      fillOpacity: 0.88,
+      radius: 4
+    };
+  }
+
+  return {
+    color: '#d9d9d9',
+    weight: 1.1,
+    opacity: 0.95,
+    fillColor: '#d9d9d9',
+    fillOpacity: 0.22,
+    radius: 4
+  };
+}
+
+function getGreyTrajectoryStyle(status) {
+  if (status === 'identical' || status === 'stable') {
+    return {
+      color: '#8a8a8a',
+      weight: 1,
+      opacity: 0.9,
+      fillColor: '#8a8a8a',
+      fillOpacity: 0.18,
+      radius: 4
+    };
+  }
+
+  if (status === 'modified') {
+    return {
+      color: '#b0b0b0',
+      weight: 1.1,
+      opacity: 0.95,
+      fillColor: '#b0b0b0',
+      fillOpacity: 0.28,
+      radius: 4
+    };
+  }
+
+  if (status === 'appeared') {
+    return {
+      color: '#d8d8d8',
+      weight: 1.1,
+      opacity: 1,
+      fillColor: '#d8d8d8',
+      fillOpacity: 0.42,
+      radius: 4
+    };
+  }
+
+  return {
+    color: '#5f5f5f',
+    weight: 1,
+    opacity: 0.85,
+    fillColor: '#5f5f5f',
+    fillOpacity: 0.10,
+    radius: 4
+  };
+}
+
+
+function getFragmentProxemicSourceFeatures(timeMode = 'T1') {
+  if (timeMode === 'T2') {
+    return [...(dataGeojsonT2 || []), ...(datamGeojsonT2 || [])];
+  }
+
+  if (timeMode === 'trajectories') {
+    const out = [];
+
+    ['montreuil', 'mirail'].forEach(zone => {
+      const pairs = buildTemporalPairsForZone(zone);
+
+      pairs.forEach(pair => {
+        const feature = pair.t2 || pair.t1;
+        if (!feature) return;
+
+        out.push({
+          ...feature,
+          properties: {
+            ...(feature.properties || {}),
+            __trajectoryStatus: pair.status,
+            __trajectoryPair: pair
+          }
+        });
+      });
+    });
+
+    return out;
+  }
+
+  return [...(dataGeojsonT1 || []), ...(datamGeojsonT1 || [])];
+}
+
+
+function getZoneTemporalArrays(zone) {
+  if (zone === 'mirail') {
+    return {
+      t1: datamGeojsonT1 || [],
+      t2: datamGeojsonT2 || []
+    };
+  }
+
+  return {
+    t1: dataGeojsonT1 || [],
+    t2: dataGeojsonT2 || []
+  };
+}
+
+function getTemporalRepresentativeFeature(pair) {
+  // choix simple et stable :
+  // - si T2 existe, on prend T2 comme état représentatif
+  // - sinon on garde T1
+  return pair?.t2 || pair?.t1 || null;
+}
+
+function buildTemporalFragmentIndex() {
+  const zones = ['montreuil', 'mirail'];
+  const out = {
+    montreuil: new Map(),
+    mirail: new Map()
+  };
+
+  zones.forEach(zone => {
+    const { t1, t2 } = getZoneTemporalArrays(zone);
+
+    const map1 = new Map((t1 || []).map(f => [cleanFragmentId(f.properties?.id), f]));
+    const map2 = new Map((t2 || []).map(f => [cleanFragmentId(f.properties?.id), f]));
+
+    const ids = new Set([...map1.keys(), ...map2.keys()]);
+
+    ids.forEach(id => {
+      const f1 = map1.get(id) || null;
+      const f2 = map2.get(id) || null;
+
+      let status = 'stable';
+      let delta = null;
+
+      if (f1 && f2) {
+        const vec1 = featureToVector(f1);
+        const vec2 = featureToVector(f2);
+        const sim = similarityFuzzy(vec1, vec2);
+        delta = Math.max(0, 1 - sim);
+
+        status = delta > 0 ? 'modified' : 'stable';
+      } else if (f1 && !f2) {
+        status = 'disappeared';
+      } else if (!f1 && f2) {
+        status = 'appeared';
+      }
+
+      out[zone].set(id, {
+        id,
+        zone,
+        t1: f1,
+        t2: f2,
+        status,
+        delta,
+        representative: getTemporalRepresentativeFeature({ t1: f1, t2: f2 })
+      });
+    });
+  });
+
+  temporalFragmentIndex = out;
+  return out;
+}
+
+function getTemporalInfoForFragmentId(fragmentId, zone) {
+  const z = zone || 'montreuil';
+  const id = cleanFragmentId(fragmentId);
+  return temporalFragmentIndex?.[z]?.get(id) || null;
+}
+
+function getTemporalStatusSimilarity(statusA, statusB) {
+  if (!statusA || !statusB) return 0;
+
+  if (statusA === statusB) return 1;
+
+  if (TEMPORAL_APP_DIS_STRICT) {
+    if (
+      (statusA === 'appeared' && statusB === 'disappeared') ||
+      (statusA === 'disappeared' && statusB === 'appeared')
+    ) {
+      return 0;
+    }
+  }
+
+  return Math.max(0, 1 - TEMPORAL_STATUS_PENALTY);
+}
+
+function getTemporalDeltaSimilarity(infoA, infoB) {
+  if (!infoA || !infoB) return 0;
+
+  const statusA = infoA.status;
+  const statusB = infoB.status;
+
+  // cas stricts sans delta numérique
+  if (statusA === 'appeared' && statusB === 'appeared') return 1;
+  if (statusA === 'disappeared' && statusB === 'disappeared') return 1;
+
+  // apparu ≠ disparu : distincts
+  if (
+    (statusA === 'appeared' && statusB === 'disappeared') ||
+    (statusA === 'disappeared' && statusB === 'appeared')
+  ) {
+    return 0;
+  }
+
+  // si statuts différents (ex stable vs modified)
+  if (statusA !== statusB) {
+    return Math.max(0, 1 - TEMPORAL_STATUS_PENALTY);
+  }
+
+  // stable/modifié avec delta numérique
+  if (
+    (statusA === 'stable' || statusA === 'modified') &&
+    (statusB === 'stable' || statusB === 'modified')
+  ) {
+    const dA = Number.isFinite(infoA.delta) ? infoA.delta : 0;
+    const dB = Number.isFinite(infoB.delta) ? infoB.delta : 0;
+    return Math.max(0, 1 - Math.abs(dA - dB));
+  }
+
+  return 0;
+}
+
+function computeFragmentTemporalProfile(feature) {
+  const props = feature?.properties || {};
+  const id = cleanFragmentId(props.id);
+  const zone = props.zone || 'montreuil';
+
+  const info = getTemporalInfoForFragmentId(id, zone);
+
+  return {
+    id,
+    zone,
+    status: info?.status || 'stable',
+    delta: info?.delta ?? null
+  };
+}
+
+function buildTemporalProfilesForAgencement(fragmentsInCircle) {
+  return (fragmentsInCircle || [])
+    .map(f => computeFragmentTemporalProfile(f))
+    .filter(p => p.id);
+}
+
+function computeTemporalFragmentPairScore(profileA, profileB) {
+  if (!profileA || !profileB) return 0;
+
+  const sStatus = getTemporalStatusSimilarity(profileA.status, profileB.status);
+  const sDelta = getTemporalDeltaSimilarity(profileA, profileB);
+
+  // si mêmes statuts "apparu/appa ru" ou "disparu/disparu", sDelta = 1
+  // si stable/modified, sDelta compare les deltas
+  // si statuts différents, sStatus porte la pénalité
+  const score = Math.min(sStatus, sDelta);
+
+  return Math.max(TEMPORAL_MIN_MATCH_SCORE, score);
+}
+
+function computeBestTemporalMatchScore(profileA, profilesB, usedIds = new Set()) {
+  let bestScore = -1;
+  let bestIdx = -1;
+
+  profilesB.forEach((profileB, idx) => {
+    if (usedIds.has(idx)) return;
+
+    const s = computeTemporalFragmentPairScore(profileA, profileB);
+    if (s > bestScore) {
+      bestScore = s;
+      bestIdx = idx;
+    }
+  });
+
+  return { bestScore, bestIdx };
+}
+
+function similarityTemporalAgencements(agA, agB) {
+  const profilesA = agA?.temporalProfiles || [];
+  const profilesB = agB?.temporalProfiles || [];
+
+  if (!profilesA.length || !profilesB.length) return 0;
+
+  // on apparie toujours la plus petite liste vers la plus grande
+  const small = profilesA.length <= profilesB.length ? profilesA : profilesB;
+  const large = profilesA.length <= profilesB.length ? profilesB : profilesA;
+
+  const used = new Set();
+  let sum = 0;
+  let count = 0;
+
+  small.forEach(profileA => {
+    const { bestScore, bestIdx } = computeBestTemporalMatchScore(profileA, large, used);
+    if (bestIdx >= 0) {
+      used.add(bestIdx);
+      sum += bestScore;
+      count++;
+    }
+  });
+
+  if (!count) return 0;
+
+  // pénalité légère si les tailles diffèrent beaucoup
+  const sizePenalty = Math.min(small.length, large.length) / Math.max(small.length, large.length);
+
+  return (sum / count) * sizePenalty;
+}
+
+
+
+/* ==================================================
+   HELPERS — IMAGES
+================================================== */
+
 function cleanPhotoUrl(u) {
   if (!u) return null;
-  // trim + force https
+
   let s = String(u).trim().replace(/^http:\/\//i, 'https://');
-  // garde uniquement l'URL (si du HTML a été collé)
   const m = s.match(/https?:\/\/[^\s"'<>]+/i);
+
   return m ? m[0] : null;
 }
 
 function normalizePhotos(p) {
   if (!p) return [];
   if (Array.isArray(p)) return p;
+
   if (typeof p === 'string') {
-    // accepte séparateur virgule ou point-virgule
     return p.split(/[;,]\s*/).filter(Boolean);
   }
+
   return [];
 }
 
@@ -87,81 +1271,399 @@ function makeImg(src, alt = 'photo', { priority = 'low', lazy = true } = {}) {
   img.alt = alt;
   img.decoding = 'async';
   img.referrerPolicy = 'no-referrer';
-  img.onerror = () => { img.style.display = 'none'; };
+  img.onerror = () => {
+    img.style.display = 'none';
+  };
 
-  // priorité réseau (Chrome/Edge/Opera + Safari récents)
   img.setAttribute('fetchpriority', priority);
   img.fetchPriority = priority;
 
   if (lazy) img.loading = 'lazy';
 
   if (lazy && 'IntersectionObserver' in window) {
-    // tiny placeholder pour déclencher la mise en page instantanément
     img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
     img.dataset.src = url;
     ensureImgObserver().observe(img);
   } else {
-    // images prioritaires / peu nombreuses : on charge tout de suite
     img.src = url;
   }
+
   return img;
 }
 
-let __imgObserver = null;
+
+
 function ensureImgObserver() {
   if (__imgObserver) return __imgObserver;
+
   __imgObserver = new IntersectionObserver((entries, obs) => {
     entries.forEach(entry => {
       if (!entry.isIntersecting) return;
+
       const img = entry.target;
       const real = img.dataset.src;
+
       if (real) {
         img.src = real;
         img.removeAttribute('data-src');
       }
+
       obs.unobserve(img);
     });
-  }, { rootMargin: '800px 0px', threshold: 0.01 }); // précharge ~800px avant
+  }, {
+    rootMargin: '800px 0px',
+    threshold: 0.01
+  });
+
   return __imgObserver;
 }
 
 
-/*---------------------------------------
-  BASCULE TOULOUSE / MONTREUIL
----------------------------------------*/
-function toggleLocation() {
-  const locationButton = document.getElementById('toggle-location-btn');
+/* ==================================================
+   HELPERS — BÂTIMENTS
+================================================== */
 
-  // Choisir/initialiser la carte cible selon la vue courante
-  let targetMap = map; // défaut: carte "Fragments"
+function getPropEtat(props) {
+  const v = props?.['état'] ?? props?.['etat'] ?? 'inconnu';
+  return normStr(v);
+}
 
-  if (currentView === 'patterns-map') {
-    // S'assure que la carte patterns existe
-    initPatternMapOnce?.();
-    if (patternMap) targetMap = patternMap;            // << plus de window.
-  } else if (currentView === 'unit' || currentView === 'unit-view') {
-    // S'assure que la carte unité existe
-    ensureUnitMap?.();
-    if (unitMap) targetMap = unitMap;                  // << plus de window.
+function getPropFonction(props) {
+  const v = props?.['fonction'] ?? 'inconnu';
+  return normStr(v);
+}
+
+function ensureBuildingHatchDefs(leafletMap) {
+  const pane = leafletMap.getPanes().overlayPane;
+  const svg = pane.querySelector('svg');
+  if (!svg) return;
+
+  let defs = svg.querySelector('defs');
+  if (!defs) {
+    defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    svg.insertBefore(defs, svg.firstChild);
   }
 
-  // Bascule de localisation
-  if (currentLocation === 'montreuil') {
-    targetMap.setView([43.5675824, 1.4000176], 15); // Toulouse
-    if (locationButton) locationButton.textContent = 'Voir Montreuil';
-    currentLocation = 'toulouse';
+  if (defs.querySelector('#hatch-solid')) return;
+
+  const p1 = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+  p1.setAttribute('id', 'hatch-solid');
+  p1.setAttribute('patternUnits', 'userSpaceOnUse');
+  p1.setAttribute('width', '8');
+  p1.setAttribute('height', '8');
+  p1.setAttribute('patternTransform', 'rotate(45)');
+
+  const l1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  l1.setAttribute('x1', '0');
+  l1.setAttribute('y1', '0');
+  l1.setAttribute('x2', '0');
+  l1.setAttribute('y2', '8');
+  l1.setAttribute('stroke', '#9a9a9a');
+  l1.setAttribute('stroke-width', '2');
+  p1.appendChild(l1);
+
+  const p2 = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+  p2.setAttribute('id', 'hatch-light');
+  p2.setAttribute('patternUnits', 'userSpaceOnUse');
+  p2.setAttribute('width', '10');
+  p2.setAttribute('height', '10');
+  p2.setAttribute('patternTransform', 'rotate(45)');
+
+  const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  l2.setAttribute('x1', '0');
+  l2.setAttribute('y1', '0');
+  l2.setAttribute('x2', '0');
+  l2.setAttribute('y2', '10');
+  l2.setAttribute('stroke', '#a8a8a8');
+  l2.setAttribute('stroke-width', '1.5');
+  p2.appendChild(l2);
+
+  defs.appendChild(p1);
+  defs.appendChild(p2);
+}
+
+function applyHatchToLeafletLayer(layer, hatchId, fallbackFill = 'none') {
+  if (!layer || !layer._path) return;
+
+  if (!hatchId) {
+    layer._path.setAttribute('fill', fallbackFill);
+    return;
+  }
+
+  layer._path.setAttribute('fill', `url(#${hatchId})`);
+}
+
+function computeBuildingStyle(props) {
+  if (BUILDINGS_STYLE_MODE === 'fonction') {
+    const fct = getPropFonction(props);
+
+    if (fct === 'logement') {
+      return {
+        style: {
+          stroke: false,
+          fill: true,
+          fillColor: '#ffffff',
+          fillOpacity: 0.22
+        },
+        hatch: null
+      };
+    }
+
+    const c = BUILDING_FUNCTION_COLORS[fct] || BUILDING_FUNCTION_COLORS.autre;
+
+    return {
+      style: {
+        stroke: false,
+        fill: true,
+        fillColor: c,
+        fillOpacity: 1
+      },
+      hatch: null
+    };
+  }
+
+  const etat = getPropEtat(props);
+  const GREY = '#8f8f8f';
+
+  let style = {
+    stroke: false,
+    fill: true,
+    fillColor: GREY,
+    fillOpacity: 0.75
+  };
+
+  let hatch = null;
+
+  if (etat === 'habité' || etat === 'inconnu') {
+    style = {
+      stroke: false,
+      fill: true,
+      fillColor: GREY,
+      fillOpacity: 0.75
+    };
+  } else if (etat === 'démoli' || etat === 'demoli') {
+    style = {
+      stroke: true,
+      color: GREY,
+      weight: 1,
+      dashArray: '4 4',
+      fill: false,
+      fillOpacity: 0
+    };
+  } else if (etat === 'vacant') {
+    style = {
+      stroke: true,
+      color: GREY,
+      weight: 1,
+      dashArray: null,
+      fill: false,
+      fillOpacity: 0
+    };
+  } else if (etat === 'condamné' || etat === 'condamne') {
+    style = {
+      stroke: true,
+      color: GREY,
+      weight: 1,
+      dashArray: null,
+      fill: true,
+      fillColor: GREY,
+      fillOpacity: 0.6
+    };
+    hatch = 'hatch-solid';
+  } else if (
+    etat === 'en cours de démolition' ||
+    etat === 'en cours de demoliton' ||
+    etat === 'en cours de demolition'
+  ) {
+    style = {
+      stroke: true,
+      color: GREY,
+      weight: 1,
+      dashArray: '4 4',
+      fill: true,
+      fillColor: GREY,
+      fillOpacity: 0.6
+    };
+    hatch = 'hatch-solid';
+  } else if (
+    etat === 'en cours de rénovation' ||
+    etat === 'en cours de renovation'
+  ) {
+    style = {
+      stroke: false,
+      fill: true,
+      fillColor: GREY,
+      fillOpacity: 0.25
+    };
   } else {
-    targetMap.setView([48.8710, 2.4330], 15);       // Montreuil
-    if (locationButton) locationButton.textContent = 'Voir Toulouse';
-    currentLocation = 'montreuil';
+    style = {
+      stroke: false,
+      fill: true,
+      fillColor: GREY,
+      fillOpacity: 0.75
+    };
   }
+
+  return { style, hatch };
+}
+
+function restyleBuildingsOnFragmentsMap() {
+  if (!map) return;
+
+  ensureBuildingHatchDefs(map);
+
+  const candidates = [
+    batimentsLayerMontreuil,
+    batimentsLayerToulouse
+  ].filter(Boolean);
+
+  candidates.forEach(geoLayer => {
+    geoLayer.eachLayer(l => {
+      const props = l?.feature?.properties || {};
+      const { style, hatch } = computeBuildingStyle(props);
+
+      if (l.setStyle) l.setStyle(style);
+
+      requestAnimationFrame(() => {
+        if (!l._path) return;
+
+        if (hatch) {
+          applyHatchToLeafletLayer(l, hatch);
+          l._path.setAttribute('fill-opacity', String(style.fillOpacity ?? 1));
+        } else {
+          const fallback =
+            (style.fill === false || style.fillOpacity === 0)
+              ? 'none'
+              : (style.fillColor || 'none');
+
+          applyHatchToLeafletLayer(l, null, fallback);
+          l._path.setAttribute('fill-opacity', String(style.fillOpacity ?? 1));
+        }
+      });
+    });
+  });
 }
 
 
-/*---------------------------------------
- SIDEBARS CLASSIQUES (spatial/discours)
-  (les panneaux riches sont gérés par les onglets — Partie 2)
----------------------------------------*/
+/* ==================================================
+   HELPERS — PATTERNS ET AGENCEMENTS
+================================================== */
+
+function average(nums) {
+  const vals = (nums || []).filter(v => Number.isFinite(v));
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+function stdev(nums) {
+  const vals = (nums || []).filter(v => Number.isFinite(v));
+  if (vals.length < 2) return 0;
+
+  const m = average(vals);
+  const v = vals.reduce((acc, x) => acc + Math.pow(x - m, 2), 0) / vals.length;
+
+  return Math.sqrt(v);
+}
+
+function normalizedValue(v) {
+  const n = parseFuzzy(v);
+  if (n === null) return null;
+  return Math.max(0, Math.min(1, n));
+}
+
+function addCount(map, key, inc = 1) {
+  map[key] = (map[key] || 0) + inc;
+}
+
+function overlapRatioByIds(idsA, idsB) {
+  const A = new Set(idsA || []);
+  const B = new Set(idsB || []);
+  if (!A.size || !B.size) return 0;
+
+  let inter = 0;
+  for (const x of A) {
+    if (B.has(x)) inter++;
+  }
+
+  return inter / Math.min(A.size, B.size);
+}
+
+function topEntries(obj, topN = 8) {
+  return Object.entries(obj || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([label, count]) => ({ label, count }));
+}
+
+function getActiveCriteriaKeysArray() {
+  return Array.from(ACTIVE_CRITERIA_KEYS || []);
+}
+
+function computeFragmentsUnionFromOccurrences(occIds) {
+  const out = new Set();
+
+  (occIds || []).forEach(oid => {
+    const ag = agencementsById.get(oid);
+    (ag?.fragmentIds || []).forEach(fid => out.add(String(fid).trim()));
+  });
+
+  return Array.from(out);
+}
+
+function getCurrentPatternParams() {
+  return {
+    perimeterDiameterM: PERIMETER_DIAMETER_M,
+    agSimilarityThreshold: AG_SIM_THRESHOLD,
+    zones: getActiveZones ? getActiveZones() : [],
+    activeCriteriaKeys: getActiveCriteriaKeysArray()
+  };
+}
+
+
+
+
+
+/* ==================================================
+   NAVIGATION — CHANGEMENT DE TERRITOIRE
+   Bascule la carte active entre Montreuil et Toulouse.
+   La carte visée dépend de la vue ouverte :
+   - carte fragments
+   - carte patterns
+   - carte unité
+================================================== */
+function toggleLocation() {
+  const locationButton = document.getElementById('toggle-location-btn');
+  let targetMap = map;
+
+  if (currentView === 'patterns-map') {
+    initPatternMapOnce();
+    if (patternMap) targetMap = patternMap;
+  } else if (currentView === 'unit' || currentView === 'unit-view') {
+    ensureUnitMap();
+    if (unitMap) targetMap = unitMap;
+  }
+
+  if (currentLocation === 'montreuil') {
+    targetMap.setView(toulouseView, toulouseZoom);
+    currentLocation = 'toulouse';
+    if (locationButton) locationButton.textContent = 'Voir Montreuil';
+  } else {
+    targetMap.setView(montreuilView, montreuilZoom);
+    currentLocation = 'montreuil';
+    if (locationButton) locationButton.textContent = 'Voir Toulouse';
+  }
+
+  if (currentView === 'map') {
+    restyleBuildingsOnFragmentsMap();
+  }
+}
+
+/* ==================================================
+   SIDEBAR — OUVERTURE D’UN PANNEAU
+   Ouvre le bon onglet selon le type d’objet cliqué :
+   fragment, bâtiment, discours ou pattern.
+================================================== */
+
 function openSidebar(el) {
   if (!el) return;
   el.style.display   = 'block';
@@ -173,7 +1675,7 @@ function openSidebar(el) {
   el.style.zIndex    = '4001'; // au-dessus du footer & panes
 }
 
-// Helper central qui route vers les bons panneaux (Partie 2)
+// Ouvre le bon panneau selon le type d’objet cliqué
 function showDetails(props) {
   clearAllTabbedTabs(); // exclusif : 1 clic = 1 set d’infos (fonction en Partie 2)
 
@@ -183,10 +1685,7 @@ function showDetails(props) {
       id: `pattern-${key}`,
       title: key,
       kind: 'pattern',
-      render: (panel) => renderPatternPanel(panel, key, {
-        criteria: props.criteria || {},
-        elements: props.elements || []
-      })
+      render: (panel) => renderPatternPanel(panel, key, patterns[key] || {})
     });
   } else if (props.isDiscourse) {
     openTab({                         // renderDiscoursePanel en Partie 2
@@ -194,6 +1693,14 @@ function showDetails(props) {
       title: props.id || 'Discours',
       kind: 'discourse',
       render: (panel) => renderDiscoursePanel(panel, props)
+    });
+ } else if (props.isBuilding) {
+    const bid = props.id || Math.random().toString(36).slice(2);
+    openTab({
+      id: `bat-${bid}`,
+      title: props.id || 'Bâtiment',
+      kind: 'building',
+      render: (panel) => renderBuildingPanel(panel, props)
     });
   } else {
     const fid = props.id || Math.random().toString(36).slice(2);
@@ -220,19 +1727,26 @@ function closeSidebars() {
   clearAllTabbedTabs(); // (Partie 2)
 }
 
+/* ==================================================
+   FILTRES — MISE À JOUR GLOBALE
+   1) masque / affiche les couches selon les zones
+   2) recalcule les agencements et patterns visibles
+   3) rafraîchit la vue active
+================================================== */
 
-/*---------------------------------------
-  8) FILTRES + RECALCUL PATTERNS
----------------------------------------*/
 function applyFilters() {
-  const showDiscourses = true; // aujourd’hui: on affiche tjs les discours
-  const activeZones = Array.from(document.querySelectorAll('.filter-zone:checked')).map(cb => cb.value);
+  const showDiscourses = true;
+  const activeZones = getActiveZones();
 
   allLayers.forEach(layer => {
-    const props = layer.feature.properties;
-    const isDiscourse = props.isDiscourse;
+    const props = layer?.feature?.properties || {};
+    const isDiscourse = !!props.isDiscourse;
+    const isBuilding = !!props.isBuilding;
+
+    if (!isDiscourse && !isBuilding) return;
 
     const showLayer = isDiscourse ? showDiscourses : activeZones.includes(layer.zone);
+
     if (showLayer) {
       if (!map.hasLayer(layer)) layer.addTo(map);
     } else {
@@ -240,254 +1754,747 @@ function applyFilters() {
     }
   });
 
-  // recalcul patterns sur les éléments visibles (hors discours)
-  const visibleFeatures = allLayers
-    .filter(layer => map.hasLayer(layer))
-    .map(layer => layer.feature)
-    .filter(f => !f.properties.isDiscourse);
+  if (currentView === 'map') {
+    renderFragmentsMapByTimeMode();
+  }
 
-  patterns = identifyPatterns(visibleFeatures);
+  const { visibleFragments, visibleBuildings } = getVisibleSpatialFeaturesForPatterns();
 
-  // rafraîchit autres vues selon currentView (les fonctions sont en Partie 2)
-  if (currentView === 'proxemic')       showProxemicView();
-  else if (currentView === 'gallery')   showGalleryView();
+  recomputeAgencementPatterns({
+    fragments: visibleFragments,
+    buildings: visibleBuildings
+  });
 
-  // discours au premier plan si nécessaire
+  if (currentView === 'fragment-proxemic') {
+    showFragmentProxemicView();
+  } else if (currentView === 'proxemic') {
+    showProxemicView();
+  } else if (currentView === 'gallery') {
+    showGalleryView();
+  } else if (currentView === 'patterns-map') {
+    renderPatternBaseGrey();
+    refreshPatternsMap();
+  }
+
   if (discoursLayer) discoursLayer.bringToFront();
 }
 
-// écoute modifications des checkboxes de zones
-document.querySelectorAll('.filter-zone').forEach(cb => {
-  cb.addEventListener('change', () => {
-    applyFilters();
 
-    if (currentView === 'patterns-map') {
-      renderPatternBaseGrey(); // (Partie 2)
-      const visible = [...dataGeojson, ...datamGeojson].filter(f => isFeatureInActiveZones(f) && !f.properties.isDiscourse);
-      patterns = identifyPatterns(visible);
-      refreshPatternsMap();   // (Partie 2)
+function recomputeAgencementPatterns({ fragments, buildings }) {
+  agencements = buildAgencements({
+    fragments,
+    buildings,
+    diameterM: PERIMETER_DIAMETER_M
+  });
+
+  agencementsById = new Map((agencements || []).map(a => [a.id, a]));
+
+  agencementPatterns = clusterAgencementsIntoPatterns(agencements, AG_SIM_THRESHOLD);
+  patterns = agencementPatterns;
+
+  fragmentToPatternIds = new Map();
+
+  (agencements || []).forEach(ag => {
+    const pList = ag.patternIds || [];
+    if (!pList.length) return;
+
+    (ag.fragmentIds || []).forEach(fid => {
+      const id = String(fid).trim();
+      if (!fragmentToPatternIds.has(id)) fragmentToPatternIds.set(id, []);
+      fragmentToPatternIds.get(id).push(...pList);
+    });
+  });
+
+  fragmentToPatternIds.forEach((arr, fid) => {
+    const uniq = Array.from(new Set(arr));
+    uniq.sort((a, b) => parseInt(a.replace('P', ''), 10) - parseInt(b.replace('P', ''), 10));
+    fragmentToPatternIds.set(fid, uniq);
+  });
+}
+
+
+/*---------------------------------------
+  AGENCEMENTS (Étape 2) : construction des occurrences
+---------------------------------------*/
+
+
+function getActiveFuzzyValues(props) {
+  const out = {};
+  for (const k of ALL_FUZZY_KEYS) {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) continue;
+    out[k] = normalizedValue(props?.[k]);
+  }
+  return out;
+}
+
+function computePoleScoresFromProps(props) {
+  const groups = {
+    PA: [],
+    DH: [],
+    FS: []
+  };
+
+  FUZZY_GROUPS.PA.forEach(k => {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
+    const v = normalizedValue(props?.[k]);
+    if (v !== null) groups.PA.push(v);
+  });
+
+  FUZZY_GROUPS.DH.forEach(k => {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
+    const v = normalizedValue(props?.[k]);
+    if (v !== null) groups.DH.push(v);
+  });
+
+  FUZZY_GROUPS.FS.forEach(k => {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
+    const v = normalizedValue(props?.[k]);
+    if (v !== null) groups.FS.push(v);
+  });
+
+  return {
+    PA: average(groups.PA),
+    DH: average(groups.DH),
+    FS: average(groups.FS)
+  };
+}
+
+function getDominantPole(scores) {
+  const entries = Object.entries(scores).filter(([, v]) => v !== null);
+  if (!entries.length) return null;
+  entries.sort((a, b) => b[1] - a[1]);
+  return entries[0][0];
+}
+
+function getFragmentNodeProfile(feature) {
+  const props = feature?.properties || {};
+  const fuzzyVals = getActiveFuzzyValues(props);
+  const poleScores = computePoleScoresFromProps(props);
+  const dominantPole = getDominantPole(poleScores);
+  const temporalProfile = computeFragmentTemporalProfile(feature);
+
+  const textTokens = {};
+  for (const k of TEXT_KEYS) {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) continue;
+    textTokens[k] = parseMultiText(props?.[k]) || [];
+  }
+
+  return {
+    id: String(props.id || '').trim(),
+    center: getFeatureCenterLatLng(feature),
+    fuzzyVals,
+    poleScores,
+    dominantPole,
+    textTokens,
+    temporalProfile
+  };
+}
+
+function getBuildingsInSameAgencement(fragment, buildings) {
+  const c = getFeatureCenterLatLng(fragment);
+  if (!c) return [];
+
+  const out = [];
+  for (const b of (buildings || [])) {
+    const bc = getFeatureCenterLatLng(b);
+    if (!bc) continue;
+    const d = distanceMeters(c, bc);
+    out.push({ building: b, dist: d });
+  }
+
+  out.sort((a, b) => a.dist - b.dist);
+  return out;
+}
+
+function computePairRelation(nodeA, nodeB) {
+  const deltas = [];
+
+  ["PA", "DH", "FS"].forEach(p => {
+    const a = nodeA.poleScores[p];
+    const b = nodeB.poleScores[p];
+    if (a !== null && b !== null) deltas.push(Math.abs(a - b));
+  });
+
+  const poleGap = deltas.length ? average(deltas) : null;
+
+  return {
+    poleGap
+  };
+}
+
+function computeAgencementRelationalSignature(fragmentsInCircle, buildingsInCircle, radiusM) {
+  const nodeProfiles = fragmentsInCircle.map(getFragmentNodeProfile).filter(n => n.id && n.center);
+  const temporalProfiles = nodeProfiles.map(n => n.temporalProfile).filter(Boolean);
+
+  const nodeMotifs = {};
+  const buildingMotifs = {};
+  const rareMotifs = {};
+  const numericMeans = {};
+  const numericSpread = {};
+  const textTokens = {};
+
+  ALL_FUZZY_KEYS.forEach(k => {
+    numericMeans[k] = null;
+    numericSpread[k] = null;
+  });
+  TEXT_KEYS.forEach(k => {
+    textTokens[k] = [];
+  });
+
+  if (!nodeProfiles.length) {
+  return {
+    nodeCount: 0,
+    edgeCount: 0,
+    density: 0,
+    nodeMotifs,
+    buildingMotifs,
+    rareMotifs,
+    numericMeans,
+    numericSpread,
+    textTokens,
+    dominantPoleShares: {},
+    buildingContextStats: {},
+    internalContrast: 0,
+    temporalProfiles: []
+  };
+}
+
+  // 1) motifs de nœuds
+  const dominantPoleCount = { PA: 0, DH: 0, FS: 0, unknown: 0 };
+
+nodeProfiles.forEach(n => {
+  const pole = n.dominantPole || "unknown";
+  dominantPoleCount[pole] = (dominantPoleCount[pole] || 0) + 1;
+
+  ALL_FUZZY_KEYS.forEach(k => {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
+
+    const v = n.fuzzyVals[k];
+
+    if (v === null || v === undefined) {
+      addCount(nodeMotifs, `node_${k}:__NULL__`, SHARED_NULL_WEIGHT);
+      return;
     }
+
+    const rounded = Math.round(v * 100) / 100;
+    addCount(nodeMotifs, `node_${k}:${rounded.toFixed(2)}`, 1);
+  });
+
+  TEXT_KEYS.forEach(k => {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
+
+    const toks = n.textTokens[k] || [];
+    if (!toks.length) {
+      addCount(nodeMotifs, `node_${k}:__NULL__`, SHARED_NULL_WEIGHT);
+      return;
+    }
+
+    toks.forEach(tok => addCount(nodeMotifs, `node_${k}:${tok}`, 1));
   });
 });
 
+  // 2) edges ouverts = voisinages spatiaux
+  let edgeCount = 0;
+  const pairDistances = [];
+  const localDegrees = new Map(nodeProfiles.map(n => [n.id, 0]));
+  const internalContrasts = [];
+
+  for (let i = 0; i < nodeProfiles.length; i++) {
+  for (let j = i + 1; j < nodeProfiles.length; j++) {
+    const a = nodeProfiles[i];
+    const b = nodeProfiles[j];
+    const d = distanceMeters(a.center, b.center);
+
+    edgeCount++;
+    localDegrees.set(a.id, (localDegrees.get(a.id) || 0) + 1);
+    localDegrees.set(b.id, (localDegrees.get(b.id) || 0) + 1);
+
+    if (Number.isFinite(d)) {
+      pairDistances.push(d);
+    }
+
+    const rel = computePairRelation(a, b);
+
+    if (rel.poleGap !== null) {
+      internalContrasts.push(rel.poleGap);
+    }
+  }
+}
+
+  // 3) relation fragments ↔ bâtiments proches
+  const buildingDistances = [];
+  const buildingStates = {};
+  const buildingFunctions = {};
+
+  (buildingsInCircle || []).forEach(b => {
+    const p = b?.properties || {};
+    const etat = getPropEtat(p) || "inconnu";
+    const fonction = getPropFonction(p) || "inconnu";
+    buildingStates[etat] = (buildingStates[etat] || 0) + 1;
+    buildingFunctions[fonction] = (buildingFunctions[fonction] || 0) + 1;
+  });
+
+  nodeProfiles.forEach(n => {
+    const frag = fragmentsInCircle.find(f => String(f?.properties?.id || '').trim() === n.id);
+    const nearB = getBuildingsInSameAgencement(frag, buildingsInCircle);
+
+    if (!nearB.length) {
+      addCount(buildingMotifs, `frag_building:none`, 1);
+      return;
+    }
+
+    const first = nearB[0];
+    const bp = first.building?.properties || {};
+    const etat = getPropEtat(bp) || "inconnu";
+    const fonction = getPropFonction(bp) || "inconnu";
+    const dist = first.dist;
+
+    buildingDistances.push(dist);
+
+    addCount(buildingMotifs, `frag_building_state:${etat}`, 1);
+    addCount(buildingMotifs, `frag_building_function:${fonction}`, 1);
+
+    const dbin =
+  dist <= radiusM * 0.33 ? "near" :
+  dist <= radiusM * 0.66 ? "mid" : "far";
+addCount(buildingMotifs, `frag_building_dist:${dbin}`, 1);
+
+    if (n.dominantPole) {
+      addCount(buildingMotifs, `fragpole_buildingstate:${n.dominantPole}_${etat}`, 1);
+      addCount(buildingMotifs, `fragpole_buildingfunction:${n.dominantPole}_${fonction}`, 1);
+    }
+  });
+
+  // 4) stats numériques internes
+  ALL_FUZZY_KEYS.forEach(k => {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
+
+    const vals = nodeProfiles
+      .map(n => n.fuzzyVals[k])
+      .filter(v => v !== null);
+
+    numericMeans[k] = vals.length ? average(vals) : null;
+    numericSpread[k] = vals.length ? stdev(vals) : null;
+  });
+
+  TEXT_KEYS.forEach(k => {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
+    const s = new Set();
+    nodeProfiles.forEach(n => (n.textTokens[k] || []).forEach(tok => s.add(tok)));
+    textTokens[k] = Array.from(s);
+  });
+
+  const possibleEdges = (nodeProfiles.length * (nodeProfiles.length - 1)) / 2;
+  const density = possibleEdges > 0 ? edgeCount / possibleEdges : 0;
+
+  const dominantPoleShares = {
+    PA: (dominantPoleCount.PA || 0) / nodeProfiles.length,
+    DH: (dominantPoleCount.DH || 0) / nodeProfiles.length,
+    FS: (dominantPoleCount.FS || 0) / nodeProfiles.length
+  };
+
+  // 5) motifs rares
+Object.entries(nodeMotifs).forEach(([k, v]) => {
+  if (v <= 1) addCount(rareMotifs, k, 1);
+});
+
+Object.entries(buildingMotifs).forEach(([k, v]) => {
+  if (v <= 1) addCount(rareMotifs, k, 1);
+});
+
+    return {
+    nodeCount: nodeProfiles.length,
+    edgeCount,
+    density,
+    avgPairDistance: pairDistances.length ? average(pairDistances) : null,
+    avgLocalDegree: average(Array.from(localDegrees.values())),
+    nodeMotifs,
+    buildingMotifs,
+    rareMotifs,
+    numericMeans,
+    numericSpread,
+    textTokens,
+    dominantPoleShares,
+    buildingContextStats: {
+      totalBuildings: (buildingsInCircle || []).length,
+      avgBuildingDistance: buildingDistances.length ? average(buildingDistances) : null,
+      stateCounts: buildingStates,
+      functionCounts: buildingFunctions
+    },
+    internalContrast: internalContrasts.length ? average(internalContrasts) : 0,
+    temporalProfiles
+  };
+}
+
+
+
+
+function buildAgencements({ fragments, buildings, diameterM }) {
+  const radiusM = Math.max(10, Number(diameterM) / 2);
+
+  const frags = (fragments || []).filter(Boolean);
+  const blds  = (buildings || []).filter(Boolean);
+
+  const fragCenters = frags.map(f => getFeatureCenterLatLng(f));
+  const bldCenters  = blds.map(b => getFeatureCenterLatLng(b));
+
+  const uniq = new Map();
+  const keptCenters = [];
+  const SEED_SPACING_FACTOR = 0.55;
+  const seedMinDist = radiusM * SEED_SPACING_FACTOR;
+
+  let idx = 1;
+
+  for (let i = 0; i < frags.length; i++) {
+    const center = fragCenters[i];
+    if (!center) continue;
+
+    let tooClose = false;
+    for (const c0 of keptCenters) {
+      if (distanceMeters(c0, center) <= seedMinDist) {
+        tooClose = true;
+        break;
+      }
+    }
+    if (tooClose) continue;
+
+    const fragmentsInCircle = [];
+const fragmentIds = [];
+
+for (let j = 0; j < frags.length; j++) {
+  const ll = fragCenters[j];
+  if (!ll) continue;
+  if (distanceMeters(ll, center) <= radiusM) {
+    fragmentsInCircle.push(frags[j]);
+    fragmentIds.push(String(frags[j]?.properties?.id ?? `frag_${j}`).trim());
+  }
+}
+
+const buildingsInCircle = [];
+const buildingIds = [];
+
+for (let k = 0; k < blds.length; k++) {
+  const ll = bldCenters[k];
+  if (!ll) continue;
+  if (distanceMeters(ll, center) <= radiusM) {
+    buildingsInCircle.push(blds[k]);
+    buildingIds.push(String(blds[k]?.properties?.id ?? `bld_${k}`).trim());
+  }
+}
+
+const fragCount = fragmentsInCircle.length;
+const bldCount = buildingsInCircle.length;
+
+const isValidAgencement =
+  fragCount >= MIN_AG_FRAGMENTS ||
+  (
+    ALLOW_SINGLE_FRAGMENT_WITH_BUILDINGS &&
+    fragCount === 1 &&
+    bldCount >= MIN_BUILDINGS_FOR_SINGLE_FRAGMENT
+  );
+
+if (!isValidAgencement) continue;
+
+
+    fragmentIds.sort();
+    buildingIds.sort();
+
+    // clé de dédup plus souple, centrée sur fragments + taille
+    const key = [
+      `F:${fragmentIds.join("|")}`,
+      `B:${buildingIds.slice(0, 8).join("|")}`,
+      `N:${fragmentIds.length}`
+    ].join("::");
+
+    if (uniq.has(key)) continue;
+
+    const relational = computeAgencementRelationalSignature(
+      fragmentsInCircle,
+      buildingsInCircle,
+      radiusM
+    );
+
+        uniq.set(key, {
+      id: `A${idx++}`,
+      center,
+      radiusM,
+      fragmentIds,
+      buildingIds,
+      fragmentsCount: fragmentsInCircle.length,
+      buildingsCount: buildingsInCircle.length,
+      fragmentsAgg: relational,   // on garde ce nom pour ne pas casser le reste
+      buildingsAgg: relational.buildingContextStats,
+      temporalProfiles: relational.temporalProfiles || [],
+      patternIds: []
+    });
+
+    keptCenters.push(center);
+  }
+
+  return Array.from(uniq.values());
+}
 
 /*---------------------------------------
-  9) BITMASKS CRITÈRES (perf + utils)
+  AGENCEMENTS (Étape 3) : vectorisation + similarité + clustering
 ---------------------------------------*/
-let patternCounter = 1; // (NOTE: non utilisé directement ici; conservé)
-
-/***************************************************
- * 1) LISTE DES CLÉS FUZZY (dans l’ordre fixe)
- ***************************************************/
-const ALL_FUZZY_KEYS = [
-  // Pratiques actives
-  "PA_P1_intensitesoin",
-  "PA_P1_frequencegestes",
-  "PA_P1_degrecooperation",
-
-  "PA_P2_degretransformation",
-  "PA_P2_perrenite",
-  "PA_P2_autonomie",
-
-  "PA_P3_intensiteusage",
-  "PA_P3_frequenceusage",
-  "PA_P3_diversitepublic",
-  "PA_P3_conflitusage",
-
-  // Dynamiques hybrides
-  "DH_P1_degreinformalite",
-  "DH_P1_echellepratique",
-  "DH_P1_degremutualisation",
-
-  "DH_P2_degréorganisation",
-  "DH_P2_porteepolitique",
-  "DH_P2_effetspatial",
-
-  "DH_P3_attachement",
-
-  "DH_P4_intensiteflux",
-
-  // Forces structurantes
-  "FS_P1_presenceinstitutionnelle",
-  "FS_P1_intensitecontrole",
-  "FS_P2_abandon",
-  "FS_P3_pressionfonciere"
-];
-
-let ACTIVE_FUZZY_KEYS = new Set(ALL_FUZZY_KEYS); // par défaut : tout est actif
 
 
 
-/***************************************************
- * 2) PARSEUR FUZZY
- ***************************************************/
-function parseFuzzy(v) {
-  if (v === "-" || v === "" || v === null || v === undefined) return null;
-  return parseFloat(String(v).replace(",", "."));
-}
+function canJoinCluster(candidate, clusterMembers, threshold) {
+  for (const other of clusterMembers) {
+    const ov = overlapRatioByIds(candidate.fragmentIds, other.fragmentIds);
+    if (ov > MAX_AG_OVERLAP) return false;
 
-/***************************************************
- * 3) CONVERTIR UN FRAGMENT EN VECTEUR FUZZY
- ***************************************************/
-function featureToVector(feature) {
-  const props = feature.properties;
-
-  return ALL_FUZZY_KEYS.map(k => {
-    if (!ACTIVE_FUZZY_KEYS.has(k)) return null; // critère désactivé
-    return parseFuzzy(props[k]);
-  });
-}
-
-
-/***************************************************
- * 4) SIMILARITÉ FUZZY
- * Retourne un score entre 0 et 1
- ***************************************************/
-function similarityFuzzy(vec1, vec2) {
-  let sum = 0;
-  let count = 0;
-
-  for (let i = 0; i < vec1.length; i++) {
-    const a = vec1[i];
-    const b = vec2[i];
-
-    // aucun renseignement → on ignore ce critère
-    if (a === null && b === null) continue;
-
-    let dist;
-    if (a === null || b === null) {
-      dist = 1; // absence = pénalité max
-    } else {
-      dist = Math.abs(a - b);
-    }
-
-    sum += dist;
-    count++;
+    const sim = similarityAgencements(candidate, other);
+    if (sim < threshold) return false;
   }
-
-  if (count === 0) return 0; // aucun critère exploitable
-
-  const avgDist = sum / count;
-  return 1 - avgDist;
+  return true;
 }
 
-/***************************************************
- * 5) IDENTIFICATION DES PATTERNS FUZZY
- ***************************************************/
-let SIM_THRESHOLD = 0.75;
+function summarizePatternOccurrences(occurrences) {
+  const signature = computePatternSignatureFromOccurrences(occurrences);
 
-function identifyPatterns(features) {
-  const vecs = features.map(f => ({
-    id: f.properties.id,
-    f,
-    vec: featureToVector(f)
-  }));
+  return {
+    numericMeans: signature.numericMeans,
+    numericSpread: signature.numericSpread,
+    textTokens: signature.textTokens,
+    dominantPoleShares: signature.dominantPoleShares,
+    internalContrast: signature.internalContrast,
+    temporalStatusCounts: signature.temporalStatusCounts
+  };
+}
 
-  const used = new Set();
-  const groups = [];
-  let index = 1;
+function clusterAgencementsIntoPatterns(ags, threshold) {
+  const list = (ags || []).slice();
+  if (list.length < 2) return {};
 
-  for (let i = 0; i < vecs.length; i++) {
-    if (used.has(vecs[i].id)) continue;
+  list.forEach(a => { a.patternIds = []; });
 
-    for (let j = i + 1; j < vecs.length; j++) {
-      if (used.has(vecs[j].id)) continue;
+  // tri par richesse descriptive de l’agencement
+list.sort((a, b) => {
+  const sa =
+    Object.keys(a.fragmentsAgg?.nodeMotifs || {}).length +
+    Object.keys(a.fragmentsAgg?.buildingMotifs || {}).length;
 
-      const sim = similarityFuzzy(vecs[i].vec, vecs[j].vec);
-      if (sim < SIM_THRESHOLD) continue;
+  const sb =
+    Object.keys(b.fragmentsAgg?.nodeMotifs || {}).length +
+    Object.keys(b.fragmentsAgg?.buildingMotifs || {}).length;
 
-      // Nouveau pattern
-      const group = {
-        name: `P${index++}`,
-        elements: [vecs[i].id, vecs[j].id],
-        coreSimilarity: sim
-      };
+  return sb - sa;
+});
 
-      // Extension possible
-      for (let k = 0; k < vecs.length; k++) {
-        const idk = vecs[k].id;
-        if (group.elements.includes(idk)) continue;
+  const clusters = [];
 
-        const simk = similarityFuzzy(vecs[i].vec, vecs[k].vec);
-        if (simk >= SIM_THRESHOLD) group.elements.push(idk);
+  list.forEach(ag => {
+    let placed = false;
+
+    for (const cluster of clusters) {
+      if (canJoinCluster(ag, cluster.members, threshold)) {
+        cluster.members.push(ag);
+        placed = true;
+        break;
       }
-
-      group.elements.forEach(id => used.add(id));
-      groups.push(group);
     }
-  }
 
-  // Format final : dictionnaire
-  const result = {};
-  groups.forEach(g => {
-    result[g.name] = g;
+    if (!placed) {
+      clusters.push({ members: [ag] });
+    }
   });
-  return result;
+
+  const patternsObj = {};
+  let pIndex = 1;
+
+  clusters.forEach(cluster => {
+    if (cluster.members.length < MIN_PATTERN_OCCURRENCES) return;
+
+    const key = `P${pIndex++}`;
+    const occIds = cluster.members.map(a => a.id);
+
+    cluster.members.forEach(a => {
+      a.patternIds = a.patternIds || [];
+      a.patternIds.push(key);
+    });
+
+    patternsObj[key] = {
+      name: key,
+      occurrences: occIds,
+      size: occIds.length,
+      summary: summarizePatternOccurrences(cluster.members)
+    };
+  });
+
+  return patternsObj;
 }
 
-/***************************************************
- * 6) SIGNATURE FUZZY D’UN FRAGMENT
- ***************************************************/
-function fuzzySignature(vec) {
+
+function weightedCountSimilarity(countsA = {}, countsB = {}, rareA = {}, rareB = {}) {
+  const keys = new Set([
+    ...Object.keys(countsA || {}),
+    ...Object.keys(countsB || {})
+  ]);
+  if (!keys.size) return 0;
+
+  let inter = 0;
+  let uni = 0;
+
+  keys.forEach(k => {
+    const a = countsA[k] || 0;
+    const b = countsB[k] || 0;
+
+    const rareBoost = (rareA[k] || rareB[k]) ? (1 + RARE_MOTIF_BOOST) : 1;
+
+    inter += Math.min(a, b) * rareBoost;
+    uni   += Math.max(a, b) * rareBoost;
+  });
+
+  return uni ? (inter / uni) : 0;
+}
+
+function similarityNumericStats(agA, agB) {
   let sum = 0;
   let count = 0;
-
-  for (const v of vec) {
-    if (v === null) continue;
-    sum += v;
-    count++;
-  }
-
-  if (count === 0) return 0;
-  return sum / count;
-}
-
-/***************************************************
- * 8) AFFICHAGE DES CRITÈRES DANS LES PANELS
- ***************************************************/
-function renderFuzzyCriteria(panel, feature) {
-  const props = feature.properties;
-
-  const container = document.createElement('div');
-  container.className = "fuzzy-criteria";
 
   ALL_FUZZY_KEYS.forEach(k => {
-    const raw = props[k];
-    const val = parseFuzzy(raw);
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
 
-    const line = document.createElement('div');
-    line.className = 'crit-line';
+    const aM = agA.fragmentsAgg?.numericMeans?.[k];
+    const bM = agB.fragmentsAgg?.numericMeans?.[k];
+    const aS = agA.fragmentsAgg?.numericSpread?.[k];
+    const bS = agB.fragmentsAgg?.numericSpread?.[k];
 
-    const label = document.createElement('span');
-    label.className = 'crit-label';
-    label.textContent = k;
+    if (aM === null && bM === null) {
+      if (COUNT_SHARED_NULL_IN_NUMERIC_SIM) {
+        sum += SHARED_NULL_WEIGHT;
+        count++;
+      }
+    } else if (aM !== null && bM !== null) {
+      sum += (1 - Math.min(1, Math.abs(aM - bM)));
+      count++;
+    }
 
-    const value = document.createElement('span');
-    value.className = 'crit-value';
-    value.textContent = (val !== null ? val : "—");
-
-    line.appendChild(label);
-    line.appendChild(value);
-    container.appendChild(line);
+    if (aS === null && bS === null) {
+      if (COUNT_SHARED_NULL_IN_NUMERIC_SIM) {
+        sum += SHARED_NULL_WEIGHT;
+        count++;
+      }
+    } else if (aS !== null && bS !== null) {
+      sum += (1 - Math.min(1, Math.abs(aS - bS)));
+      count++;
+    }
   });
 
-  panel.appendChild(container);
+  return count ? (sum / count) : 0;
 }
 
-function recomputePatternsAndRefreshViews() {
-  // Recalcule la liste des features visibles selon la vue
-  const visible = [...(dataGeojson || []), ...(datamGeojson || [])]
-    .filter(f => isFeatureInActiveZones ? isFeatureInActiveZones(f) : true)
-    .filter(f => !f.properties?.isDiscourse);
 
-  patterns = identifyPatterns(visible);
+function similarityAgencements(agA, agB) {
+  const sigA = agA.fragmentsAgg || {};
+  const sigB = agB.fragmentsAgg || {};
 
+  // 1) Similarité numérique existante
+  const sNum = similarityNumericStats(agA, agB);
 
+  // 2) Similarité de motifs existante
+  const mergedMotifsA = {
+    ...(sigA.nodeMotifs || {})
+  };
+  const mergedMotifsB = {
+    ...(sigB.nodeMotifs || {})
+  };
+
+  Object.entries(sigA.buildingMotifs || {}).forEach(([k, v]) => {
+    mergedMotifsA[k] = (mergedMotifsA[k] || 0) + v;
+  });
+
+  Object.entries(sigB.buildingMotifs || {}).forEach(([k, v]) => {
+    mergedMotifsB[k] = (mergedMotifsB[k] || 0) + v;
+  });
+
+  const mergedRareA = {
+    ...(sigA.rareMotifs || {})
+  };
+  const mergedRareB = {
+    ...(sigB.rareMotifs || {})
+  };
+
+  const sMotifs = weightedCountSimilarity(
+    mergedMotifsA,
+    mergedMotifsB,
+    mergedRareA,
+    mergedRareB
+  );
+
+  // 3) Nouvelle similarité temporelle
+  const sTemporalites = similarityTemporalAgencements(agA, agB);
+
+  return (
+    AG_WEIGHT_SNUM * sNum +
+    AG_WEIGHT_SMOTIFS * sMotifs +
+    AG_WEIGHT_STEMPORALITES * sTemporalites
+  );
 }
 
-/*---------------------------------------
- 11) CHARGEMENT DES DONNÉES GEOJSON
----------------------------------------*/
+
+
+function computeInternalDiffractionEdges(patternsObj, byIdFeatureMap, { topK = 1 } = {}) {
+  const out = [];
+  if (!patternsObj) return out;
+
+  for (const [pName, pData] of Object.entries(patternsObj)) {
+    const occIds = (pData.occurrences || []).slice();
+    if (occIds.length < 1) continue;
+
+    const fragIds = computeFragmentsUnionFromOccurrences(occIds);
+    if (fragIds.length < 2) continue;
+
+    const vecById = new Map();
+    fragIds.forEach(id => {
+      const f = byIdFeatureMap.get(String(id).trim().toUpperCase());
+      if (!f) return;
+      vecById.set(String(id).trim().toUpperCase(), featureToVector(f));
+    });
+
+    const ids = Array.from(vecById.keys());
+    const candidates = [];
+
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = ids[i], b = ids[j];
+        const va = vecById.get(a), vb = vecById.get(b);
+        if (!va || !vb) continue;
+
+        const res = oppositionFuzzy(va, vb);
+        if (!res.valid) continue;
+
+        candidates.push({
+          pattern: pName,
+          a, b,
+          opposition: res.opposition,
+          comparability: res.comparability,
+          common: res.common,
+          mismatch: res.mismatch
+        });
+      }
+    }
+
+    candidates.sort((x, y) => y.opposition - x.opposition);
+    out.push(...candidates.slice(0, Math.max(1, topK)));
+  }
+
+  return out;
+}
+
+
+/* ==================================================
+   6) CHARGEMENT DES DONNÉES GEOJSON
+   - contour
+   - fragments
+   - discours
+   - bâtiments
+   Chaque chargement alimente les états globaux
+   puis déclenche si nécessaire un recalcul / rerender.
+================================================== */
+
 // Contours (non interactifs)
 fetch('data/contour.geojson')
   .then(r => r.json())
@@ -498,47 +2505,70 @@ fetch('data/contour.geojson')
     }).addTo(map);
   });
 
-// Fragments Montreuil + Mirail
+// Fragments Montreuil + Mirail aux deux temporalités distinctes
 Promise.all([
   fetch('data/data.geojson').then(r => r.json()),
-  fetch('data/datam.geojson').then(r => r.json())
-]).then(([data, dataM]) => {
-  dataGeojson  = data.features;
-  datamGeojson = dataM.features;
+  fetch('data/data2.geojson').then(r => r.json()),
+  fetch('data/datam.geojson').then(r => r.json()),
+  fetch('data/datam2.geojson').then(r => r.json())
+]).then(([dataT1, dataT2, dataMT1, dataMT2]) => {
+  dataGeojsonT1  = dataT1.features || [];
+  dataGeojsonT2  = dataT2.features || [];
+  datamGeojsonT1 = dataMT1.features || [];
+  datamGeojsonT2 = dataMT2.features || [];
 
-  // Montreuil
-  L.geoJSON({ type:'FeatureCollection', features: dataGeojson }, {
-    pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
-      radius: 4, color: 'red', weight: 1, opacity: 1, fillColor: 'red', fillOpacity: 0.8
-    }),
-    style: () => ({ color:'red', weight:0.9, fillOpacity:0.3 }),
-    onEachFeature: (feature, layer) => {
-      layer.zone = 'montreuil';
-      allLayers.push(layer);
-      layer.on('click', () => showDetails(feature.properties));
-    }
-  }).addTo(map);
+  dataGeojsonT1.forEach(f => {
+    f.properties = f.properties || {};
+    f.properties.zone = 'montreuil';
+    f.properties.__timeState = 'T1';
+  });
 
-  // Mirail
-  L.geoJSON({ type:'FeatureCollection', features: datamGeojson }, {
-    pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
-      radius: 4, color: 'blue', weight: 1, opacity: 1, fillColor: 'blue', fillOpacity: 0.8
-    }),
-    style: () => ({ color:'blue', weight:0.9, fillOpacity:0.3 }),
-    onEachFeature: (feature, layer) => {
-      layer.zone = 'mirail';
-      allLayers.push(layer);
-      layer.on('click', () => showDetails(feature.properties));
-    }
-  }).addTo(map);
+  dataGeojsonT2.forEach(f => {
+    f.properties = f.properties || {};
+    f.properties.zone = 'montreuil';
+    f.properties.__timeState = 'T2';
+  });
 
-  // Calcul initial des patterns (toutes zones)
-  const allSpatialFeatures = [...dataGeojson, ...datamGeojson].filter(f => !f.properties.isDiscourse);
-  patterns = identifyPatterns(allSpatialFeatures);
-  patternsVersion++;
+  datamGeojsonT1.forEach(f => {
+    f.properties = f.properties || {};
+    f.properties.zone = 'mirail';
+    f.properties.__timeState = 'T1';
+  });
+
+  datamGeojsonT2.forEach(f => {
+    f.properties = f.properties || {};
+    f.properties.zone = 'mirail';
+    f.properties.__timeState = 'T2';
+  });
+
+  // temporalités pour calculer les patterns
+   buildTemporalFragmentIndex();
+
+  const canonicalMontreuil = [];
+  temporalFragmentIndex.montreuil.forEach(info => {
+    if (info.representative) canonicalMontreuil.push(info.representative);
+  });
+
+  const canonicalMirail = [];
+  temporalFragmentIndex.mirail.forEach(info => {
+    if (info.representative) canonicalMirail.push(info.representative);
+  });
+
+  // base canonique pour le moteur pattern :
+  // T2 si existe, sinon T1
+  dataGeojson = canonicalMontreuil;
+  datamGeojson = canonicalMirail;
+
   combinedFeatures = [...dataGeojson, ...datamGeojson];
 
-  // Si la carte patterns est déjà affichée, force un 1er rendu (Partie 2)
+  renderFragmentsMapByTimeMode();
+
+  const { visibleFragments, visibleBuildings } = getVisibleSpatialFeaturesForPatterns();
+  recomputeAgencementPatterns({
+    fragments: visibleFragments,
+    buildings: visibleBuildings
+  });
+
   if (currentView === 'patterns-map') {
     initPatternMapOnce();
     renderPatternBaseGrey();
@@ -572,6 +2602,83 @@ fetch('data/discours.geojson')
     discoursLayer.addTo(map);
     applyFilters(); // pour respecter l’état des checkboxes
   });
+
+
+  // Bâtiments Montreuil + Toulouse
+Promise.all([
+  fetch('data/batimentsmontreuil.geojson').then(r => r.json()),
+  fetch('data/batimenttoulouse.geojson').then(r => r.json())
+]).then(([bM, bT]) => {
+
+  batimentsMontreuilGeojson = (bM && bM.features) ? bM.features : [];
+  batimentsToulouseGeojson  = (bT && bT.features) ? bT.features : [];
+
+  // IMPORTANT : on pose une "zone" dans les properties pour que les filtres marchent
+  batimentsMontreuilGeojson.forEach(f => {
+    f.properties = f.properties || {};
+    f.properties.zone = 'montreuil';
+    f.properties.isBuilding = true; // pour ne pas polluer les patterns pour l’instant
+  });
+
+  batimentsToulouseGeojson.forEach(f => {
+    f.properties = f.properties || {};
+    f.properties.zone = 'mirail';   // chez toi "Toulouse" est filtré via la checkbox "mirail"
+    f.properties.isBuilding = true;
+  });
+
+  const buildingStyle = (feature) => {
+    // style simple (tu pourras coder par état/fonction ensuite)
+    return {
+      color: '#ffffff',
+      weight: 1,
+      opacity: 0.8,
+      fillColor: '#ffffff',
+      fillOpacity: 0.08
+    };
+  };
+
+  // Montreuil
+  batimentsLayerMontreuil = L.geoJSON(
+    { type: 'FeatureCollection', features: batimentsMontreuilGeojson },
+    {
+      pane: 'pane-batiments',
+      style: buildingStyle,
+      onEachFeature: (feature, layer) => {
+        layer.zone = 'montreuil';       // cohérent avec applyFilters()
+        layer.feature = feature;        // sécurité
+        allLayers.push(layer);          // pour que applyFilters() masque/affiche
+        layer.on('click', () => showDetails(feature.properties)); // ouvre un panneau simple
+      }
+    }
+  ).addTo(map);
+  restyleBuildingsOnFragmentsMap();
+
+
+  // Toulouse/Mirail
+  batimentsLayerToulouse = L.geoJSON(
+    { type: 'FeatureCollection', features: batimentsToulouseGeojson },
+    {
+      pane: 'pane-batiments',
+      style: buildingStyle,
+      onEachFeature: (feature, layer) => {
+        layer.zone = 'mirail';
+        layer.feature = feature;
+        allLayers.push(layer);
+        layer.on('click', () => showDetails(feature.properties));
+      }
+    }
+  ).addTo(map);
+  restyleBuildingsOnFragmentsMap();
+
+
+  // Applique l'état des checkboxes (zones)
+  applyFilters();
+
+}).catch(err => {
+  console.error("Erreur chargement bâtiments:", err);
+});
+
+
 
 
 /*==================================================
@@ -692,8 +2799,14 @@ function openTab({ id, title, kind, render }) {
 
 
 
+
+
+
+/* ==================================================
+   7) RENDU DES PANNEAUX LATÉRAUX
+================================================== */
 /*==================================================
-=    MÉTADONNÉES LOCALES PAR FRAGMENT (usage+discours) (texte)      =
+=    MÉTADONNÉES LOCALES PAR FRAGMENT 
 ==================================================*/
 function getFragMetaKey(id){ return `fragmeta:${id}`; }
 function loadFragmentMeta(fragmentId) {
@@ -707,10 +2820,74 @@ function saveFragmentMeta(fragmentId, meta) {
 }
 function uid(){ return Math.random().toString(36).slice(2,9); }
 
+/* Helpers de rendu pour les métadonnées des fragments */
+function parseGeojsonList(str) {
+  const out = [];
+  if (str && typeof str === "string") {
+    str.split(/[;,]/).forEach(x => {
+      const t = x.trim();
+      if (t && t !== "-") out.push(t);
+    });
+  }
+  return out;
+}
 
-/***************************************************
-=                PANNEAU FRAGMENT (Fuzzy + Usages) =
-***************************************************/
+function appendMetaBox(panel, title, items, emptyText) {
+  const box = document.createElement('div');
+  box.className = 'meta-box';
+
+  const head = document.createElement('div');
+  head.className = 'meta-head';
+  head.innerHTML = `<strong>${title}</strong>`;
+  box.appendChild(head);
+
+  const list = document.createElement('div');
+  list.className = 'meta-list';
+
+  if (items && items.length) {
+    items.forEach(txt => {
+      const row = document.createElement('div');
+      row.className = 'meta-item';
+      row.innerHTML = `<div class="meta-item-text">${txt}</div>`;
+      list.appendChild(row);
+    });
+  } else {
+    const empty = document.createElement('div');
+    empty.className = 'meta-empty';
+    empty.textContent = emptyText || "—";
+    list.appendChild(empty);
+  }
+
+  box.appendChild(list);
+  panel.appendChild(box);
+}
+
+/*==================================================
+   PANNEAU BATIMENTS
+==================================================*/
+function renderBuildingPanel(panel, props) {
+  panel.innerHTML = '';
+
+  const h2 = document.createElement('h2');
+  h2.textContent = props.id || 'Bâtiment';
+
+  const pId = document.createElement('p');
+  pId.innerHTML = `<strong>ID :</strong> ${props.id || '—'}`;
+
+  const pFonction = document.createElement('p');
+  pFonction.innerHTML = `<strong>Fonction :</strong> ${props.fonction || '—'}`;
+
+  // Attention : dans ton GeoJSON tu as "état" avec accent
+  const etat = props['état'] || props.etat || '—';
+  const pEtat = document.createElement('p');
+  pEtat.innerHTML = `<strong>État :</strong> ${etat}`;
+
+  panel.append(h2, pId, pFonction, pEtat);
+}
+
+/*==================================================
+   PANNEAU FRAGMENT
+==================================================*/
 function renderFragmentPanel(panel, props) {
   panel.innerHTML = '';
 
@@ -768,44 +2945,23 @@ function renderFragmentPanel(panel, props) {
 
   panel.append(actions);
 
-  /* ======================================================
-     1) USAGES issus du GeoJSON (parser la string en liste)
-     ====================================================== */
-  const existingUsages = [];
-  if (props.usages && typeof props.usages === "string") {
-    props.usages.split(/[;,]/).forEach(u => {
-      const trimmed = u.trim();
-      if (trimmed && trimmed !== "-") existingUsages.push(trimmed);
-    });
-  }
+/* ======================================================
+   1) MÉTADONNÉES issues du GeoJSON (listes)
+   - Initiateur
+   - Acteurs actifs
+   - Usages issus du terrain
+====================================================== */
+const existingInitiateur = parseGeojsonList(props.initiateur);
+const existingActeurs    = parseGeojsonList(props.acteur_actif);
+const existingUsages     = parseGeojsonList(props.usages);
+const existingElementsSpatiaux = parseGeojsonList(props.elements_spatiaux);
 
-  const blockExisting = document.createElement('div');
-  blockExisting.className = 'meta-box';
+// ordre demandé
+appendMetaBox(panel, "Initiateur", existingInitiateur, "— Aucun initiateur renseigné dans le GeoJSON.");
+appendMetaBox(panel, "Acteurs actifs", existingActeurs, "— Aucun acteur actif renseigné dans le GeoJSON.");
+appendMetaBox(panel, "Usages issus du terrain", existingUsages, "— Aucun usage renseigné dans le GeoJSON.");
+appendMetaBox(panel, "Éléments spatiaux", existingElementsSpatiaux, "— Aucun élément spatial renseigné dans le GeoJSON.");
 
-  const headExist = document.createElement('div');
-  headExist.className = 'meta-head';
-  headExist.innerHTML = `<strong>Usages issus du terrain</strong>`;
-  blockExisting.appendChild(headExist);
-
-  const listExist = document.createElement('div');
-  listExist.className = 'meta-list';
-
-  if (existingUsages.length) {
-    existingUsages.forEach(u => {
-      const row = document.createElement('div');
-      row.className = 'meta-item';
-      row.innerHTML = `<div class="meta-item-text">${u}</div>`;
-      listExist.appendChild(row);
-    });
-  } else {
-    const empty = document.createElement('div');
-    empty.className = 'meta-empty';
-    empty.textContent = "— Aucun usage renseigné dans le GeoJSON.";
-    listExist.appendChild(empty);
-  }
-
-  blockExisting.appendChild(listExist);
-  panel.append(blockExisting);
 
   /* ======================================================
      2) USAGES ajoutés localement par l’utilisateur
@@ -966,149 +3122,768 @@ function renderFragmentPanel(panel, props) {
   panel.append(fuzzyBlock);
 }
 
-
-/***************************************************
-=        PANNEAU PATTERN     =
-***************************************************/
+/*==================================================
+   PANNEAU PATTERN
+==================================================*/
 function renderPatternPanel(panel, patternKey, patternData) {
   panel.innerHTML = '';
 
-  const ids = patternData.elements || [];
-  const all = [...(dataGeojson || []), ...(datamGeojson || [])];
-  const byId = new Map(all.map(f => [f.properties.id, f]));
+  const occIds = (patternData?.occurrences || []).slice();
+  const occs = occIds
+    .map(id => agencementsById.get(id))
+    .filter(Boolean)
+    .sort((a, b) => parseInt(String(a.id).replace('A', ''), 10) - parseInt(String(b.id).replace('A', ''), 10));
 
-  /* --------------------------------------------
-     1) Titre
-  -------------------------------------------- */
   const h2 = document.createElement('h2');
-  h2.textContent = `${patternKey} — Pattern`;
+  h2.textContent = patternKey;
   panel.appendChild(h2);
-
-  /* --------------------------------------------
-     2) Similarité moyenne globale
-  -------------------------------------------- */
-  const vecs = ids.map(id => featureToVector(byId.get(id)));
-  let simSum = 0, simCount = 0;
-
-  for (let i = 0; i < vecs.length; i++) {
-    for (let j = i + 1; j < vecs.length; j++) {
-      simSum += similarityFuzzy(vecs[i], vecs[j]);
-      simCount++;
-    }
-  }
-
-  const avgSim = simCount ? simSum / simCount : 0;
 
   const pMeta = document.createElement('p');
   pMeta.className = 'pattern-meta';
-  pMeta.textContent = `${ids.length} fragments — similarité moyenne : ${avgSim.toFixed(2)}`;
+  pMeta.textContent = `${occs.length} occurrences`;
   panel.appendChild(pMeta);
 
-  /* --------------------------------------------
-     3) CRITÈRES COMMUNS (moyenne fuzzy)
-  -------------------------------------------- */
-  const consens = computeConsensusCriteriaForIds(ids);
+  if (!occs.length) {
+    const msg = document.createElement('div');
+    msg.style.color = '#aaa';
+    msg.style.padding = '8px 0';
+    msg.textContent = "Aucune occurrence disponible.";
+    panel.appendChild(msg);
+    return;
+  }
 
-  // On garde seulement les critères “significatifs”
-  const keysShown = Object.entries(consens)
-    .filter(([k, v]) => v !== null && v >= 0.2)
-    .sort((a, b) => b[1] - a[1]); // tri par importance
+  const allFrags = [...(dataGeojson || []), ...(datamGeojson || [])]
+    .filter(f => !f.properties?.isDiscourse && !f.properties?.isBuilding);
 
-  const critBlock = document.createElement('div');
-  critBlock.className = 'pattern-crit-block';
+  const byFragId = new Map(
+    allFrags.map(f => [String(f.properties?.id || '').trim(), f])
+  );
 
-  const hCrit = document.createElement('h3');
-  hCrit.textContent = 'Critères communs';
-  critBlock.appendChild(hCrit);
+  const allBlds = [...(batimentsMontreuilGeojson || []), ...(batimentsToulouseGeojson || [])];
+  const byBldId = new Map(
+    allBlds.map(b => [String(b.properties?.id || '').trim(), b])
+  );
 
-  if (!keysShown.length) {
-    const none = document.createElement('p');
-    none.textContent = 'Aucun critère commun significatif.';
-    none.style.color = '#aaa';
-    critBlock.appendChild(none);
-  } else {
-    keysShown.forEach(([k, v]) => {
-      const row = document.createElement('div');
-      row.className = 'crit-row';
+  const summary = computePatternPanelSummary(occs, byFragId);
 
-      const label = document.createElement('span');
-      label.className = 'crit-label';
-      label.textContent = k.replace(/_/g, ' ');
+  function makeListBlock(title, rows, formatter) {
+    const box = document.createElement('div');
+    box.className = 'pattern-crit-block';
+
+    const h = document.createElement('h3');
+    h.textContent = title;
+    box.appendChild(h);
+
+    if (!rows.length) {
+      const none = document.createElement('div');
+      none.style.color = '#aaa';
+      none.textContent = '—';
+      box.appendChild(none);
+      return box;
+    }
+
+    rows.forEach(rowData => {
+      const line = document.createElement('div');
+      line.className = 'crit-line';
+
+      const lab = document.createElement('span');
+      lab.className = 'crit-label';
+      lab.textContent = formatter(rowData).label;
 
       const val = document.createElement('span');
       val.className = 'crit-value';
-      val.textContent = v.toFixed(2);
+      val.textContent = formatter(rowData).value;
 
-      row.append(label, val);
-      critBlock.appendChild(row);
+      line.append(lab, val);
+      box.appendChild(line);
     });
+
+    return box;
   }
 
-  panel.appendChild(critBlock);
+  panel.appendChild(
+  makeListBlock(
+    'Critères partagés',
+    summary.sharedCriteria,
+    item => {
+      if (item.kind === 'shared-null') {
+        return {
+          label: `${prettyKey(item.key)} — absence partagée`,
+          value: `${item.total}/${item.total}`
+        };
+      }
 
-  /* --------------------------------------------
-     4) Liste des membres
-  -------------------------------------------- */
+      if (item.kind === 'shared-zero') {
+        return {
+          label: `${prettyKey(item.key)} — nul partagé`,
+          value: `${item.filledCount}/${item.total}`
+        };
+      }
+
+      return {
+        label: `${prettyKey(item.key)} : ${Number(item.mean).toFixed(2).replace('.', ',')} - `,
+        value: `${item.positiveCount}/${item.total}`
+      };
+    }
+  )
+);
+
+
+panel.appendChild(
+  makeListBlock(
+    'Critères nuls',
+    summary.nullCriteria,
+    item => ({
+      label: `${prettyKey(item.key)} :`,
+      value: `null ${item.count}/${item.total} `
+    })
+  )
+);
+
+  panel.appendChild(
+    makeListBlock(
+      'Usages / acteurs / initiateurs / éléments spatiaux',
+      summary.textCriteria,
+      item => ({
+        label: `${prettyKey(item.key)} : ${item.token} : `,
+        value: `${item.count}/${item.total}`
+      })
+    )
+  );
+
+  const contextBox = document.createElement('div');
+  contextBox.className = 'pattern-crit-block';
+
+  const hContext = document.createElement('h3');
+  hContext.textContent = 'Contexte bâti';
+  contextBox.appendChild(hContext);
+
+  const contextRows = [
+    {
+      label: 'Fragments sans bâti proche : ',
+      value: `${summary.buildingContext.noNearbyCount}/${summary.buildingContext.totalFragments}`
+    },
+    {
+      label: 'Distance moyenne au bâti proche : ',
+      value: summary.buildingContext.avgDistance !== null
+        ? `${summary.buildingContext.avgDistance.toFixed(1)} m`
+        : '—'
+    }
+  ];
+
+  summary.buildingContext.topStates.forEach(item => {
+    contextRows.push({
+      label: `État bâti proche : ${item.label}`,
+      value: `${item.count}`
+    });
+  });
+
+  summary.buildingContext.topFunctions.forEach(item => {
+    contextRows.push({
+      label: `Fonction bâtie proche : ${item.label}`,
+      value: `${item.count}`
+    });
+  });
+
+  contextRows.forEach(item => {
+    const line = document.createElement('div');
+    line.className = 'crit-line';
+
+    const lab = document.createElement('span');
+    lab.className = 'crit-label';
+    lab.textContent = item.label;
+
+    const val = document.createElement('span');
+    val.className = 'crit-value';
+    val.textContent = item.value;
+
+    line.append(lab, val);
+    contextBox.appendChild(line);
+  });
+
+  panel.appendChild(contextBox);
+
   const list = document.createElement('div');
   list.className = 'pattern-members';
 
+// temporalités — comparaison entre agencements
+const temporalBox = document.createElement('div');
+temporalBox.className = 'pattern-crit-block';
+
+const hTemporal = document.createElement('h3');
+hTemporal.textContent = 'Temporalités par agencement';
+temporalBox.appendChild(hTemporal);
+
+occs.forEach(ag => {
+  const counts = {
+    stable: 0,
+    modified: 0,
+    appeared: 0,
+    disappeared: 0
+  };
+
+  const modifiedDeltas = [];
+
+  (ag.temporalProfiles || []).forEach(tp => {
+    if (!tp?.status) return;
+
+    counts[tp.status] = (counts[tp.status] || 0) + 1;
+
+    if (tp.status === 'modified' && Number.isFinite(tp.delta)) {
+      modifiedDeltas.push(tp.delta);
+    }
+  });
+
+  const modifiedText = modifiedDeltas.length
+    ? `${counts.modified} modifiés (${modifiedDeltas.map(v => v.toFixed(2).replace('.', ',')).join(' ; ')})`
+    : `${counts.modified} modifiés`;
+
+  const line = document.createElement('div');
+  line.className = 'crit-line';
+
+  const lab = document.createElement('span');
+  lab.className = 'crit-label';
+  lab.textContent = `${ag.id} :`;
+
+  const val = document.createElement('span');
+  val.className = 'crit-value';
+  val.textContent =
+    `${counts.stable} stables • ${modifiedText} • ${counts.appeared} apparus • ${counts.disappeared} disparus`;
+
+  line.append(lab, val);
+  temporalBox.appendChild(line);
+});
+
+panel.appendChild(temporalBox);
+
+
   const hList = document.createElement('h3');
-  hList.textContent = 'Fragments du pattern';
+  hList.textContent = 'Occurrences';
   list.appendChild(hList);
 
-  ids.forEach(id => {
-    const f = byId.get(id);
-    if (!f) return;
-
+  occs.forEach(ag => {
     const row = document.createElement('div');
     row.className = 'member-row';
 
-    // photo
     const thumb = document.createElement('div');
     thumb.className = 'member-thumb';
-    const photoUrl = normalizePhotos(f.properties.photos)[0];
-    if (photoUrl) thumb.style.backgroundImage = `url("${photoUrl}")`;
 
-    // titre
+    let foundPhoto = null;
+    for (const fid of (ag.fragmentIds || [])) {
+      const f = byFragId.get(String(fid).trim());
+      if (!f) continue;
+      const p = normalizePhotos(f.properties?.photos)[0];
+      if (p) {
+        foundPhoto = p;
+        break;
+      }
+    }
+    if (foundPhoto) thumb.style.backgroundImage = `url("${foundPhoto}")`;
+
     const right = document.createElement('div');
     right.className = 'member-right';
 
     const title = document.createElement('div');
     title.className = 'member-title';
-    title.textContent = f.properties.name || id;
+    title.textContent = `${ag.id} — ${ag.fragmentsCount} fragments • ${ag.buildingsCount} bâtiments`;
 
-    // similarité du fragment au cluster
-    const simToPattern = computeFragmentPatternSimilarity(id, patternKey, byId);
+    const fragNames = (ag.fragmentIds || [])
+      .map(fid => {
+        const f = byFragId.get(String(fid).trim());
+        return f ? (f.properties?.name || fid) : fid;
+      })
+      .slice(0, 6);
 
     const info = document.createElement('div');
     info.className = 'member-info';
-    info.innerHTML = `<strong>Proximité :</strong> ${simToPattern.toFixed(2)}`;
+    info.textContent = fragNames.join(' • ') + ((ag.fragmentIds || []).length > 6 ? ' …' : '');
 
     right.append(title, info);
     row.append(thumb, right);
 
-    row.addEventListener('click', () => showDetails(f.properties));
+    row.addEventListener('click', () => {
+      openTab({
+        id: `ag-${ag.id}`,
+        title: ag.id,
+        kind: 'agencement',
+        render: (p) => renderAgencementPanel(p, ag, { byFragId, byBldId })
+      });
+    });
+
     list.appendChild(row);
   });
 
   panel.appendChild(list);
 
-  /* --------------------------------------------
-     5) Actions
-  -------------------------------------------- */
   const actions = document.createElement('div');
   actions.className = 'btn-row';
 
   const btnSave = document.createElement('button');
   btnSave.className = 'tab-btn btn-sm primary';
   btnSave.textContent = 'Enregistrer ce pattern';
-  btnSave.onclick = () => openSavePatternModal(patternKey, patternData);
+  btnSave.onclick = () => {
+    if (typeof openSavePatternModal === 'function') openSavePatternModal(patternKey, patternData);
+    else alert("Fonction d’enregistrement non disponible pour l’instant.");
+  };
 
   actions.appendChild(btnSave);
   panel.appendChild(actions);
 }
 
+// --- helpers pour le panel pattern
+function computePatternSignatureFromOccurrences(occs) {
+  const numericMeans = {};
+  const numericSpread = {};
+  const textTokens = {};
+  const dominantPoleShares = { PA: [], DH: [], FS: [] };
+  const internalContrastVals = [];
+  const temporalStatusCounts = {
+    stable: 0,
+    modified: 0,
+    appeared: 0,
+    disappeared: 0
+  };
 
+  ALL_FUZZY_KEYS.forEach(k => {
+    numericMeans[k] = null;
+    numericSpread[k] = null;
+  });
+  TEXT_KEYS.forEach(k => {
+    textTokens[k] = [];
+  });
+
+  ALL_FUZZY_KEYS.forEach(k => {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
+
+    const means = [];
+    const spreads = [];
+
+    occs.forEach(ag => {
+      const m = ag?.fragmentsAgg?.numericMeans?.[k];
+      const s = ag?.fragmentsAgg?.numericSpread?.[k];
+      if (m !== null && m !== undefined) means.push(m);
+      if (s !== null && s !== undefined) spreads.push(s);
+    });
+
+    numericMeans[k] = means.length ? average(means) : null;
+    numericSpread[k] = spreads.length ? average(spreads) : null;
+  });
+
+  TEXT_KEYS.forEach(k => {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
+    const S = new Set();
+    occs.forEach(ag => {
+      const arr = ag?.fragmentsAgg?.textTokens?.[k] || [];
+      arr.forEach(t => S.add(t));
+    });
+    textTokens[k] = Array.from(S);
+  });
+
+  occs.forEach(ag => {
+    const shares = ag?.fragmentsAgg?.dominantPoleShares || {};
+    ["PA", "DH", "FS"].forEach(p => {
+      if (Number.isFinite(shares[p])) dominantPoleShares[p].push(shares[p]);
+    });
+
+    if (Number.isFinite(ag?.fragmentsAgg?.internalContrast)) {
+      internalContrastVals.push(ag.fragmentsAgg.internalContrast);
+    }
+        (ag?.temporalProfiles || []).forEach(tp => {
+      if (!tp?.status) return;
+      temporalStatusCounts[tp.status] = (temporalStatusCounts[tp.status] || 0) + 1;
+    });
+  });
+
+    return {
+    numericMeans,
+    numericSpread,
+    textTokens,
+    dominantPoleShares: {
+      PA: average(dominantPoleShares.PA) || 0,
+      DH: average(dominantPoleShares.DH) || 0,
+      FS: average(dominantPoleShares.FS) || 0
+    },
+    internalContrast: average(internalContrastVals) || 0,
+    temporalStatusCounts
+  };
+}
+
+
+function getPatternFragmentInstances(occs, byFragId) {
+  const out = [];
+
+  (occs || []).forEach(ag => {
+    (ag.fragmentIds || []).forEach(fid => {
+      const f = byFragId.get(String(fid).trim());
+      if (f) out.push(f);
+    });
+  });
+
+  return out;
+}
+
+function computePatternPanelSummary(occs, byFragId) {
+  const fragmentInstances = getPatternFragmentInstances(occs, byFragId);
+  const total = fragmentInstances.length;
+
+  const sharedCriteria = [];
+  const nullCriteria = [];
+  const textCounts = {};
+
+  TEXT_KEYS.forEach(k => { textCounts[k] = {}; });
+
+ALL_FUZZY_KEYS.forEach(k => {
+  if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
+
+  let filledCount = 0;
+  let positiveCount = 0;
+  let nullCount = 0;
+  const filledValues = [];
+
+  fragmentInstances.forEach(f => {
+    const v = parseFuzzy(f?.properties?.[k]);
+
+    if (v === null) {
+      nullCount++;
+      return;
+    }
+
+    filledCount++;
+    filledValues.push(v);
+
+    if (v > 0) positiveCount++;
+  });
+
+  const mean = filledValues.length ? average(filledValues) : null;
+
+  // critère partagé avec valeurs réellement renseignées
+  if (filledCount > 0 && mean !== null) {
+    sharedCriteria.push({
+      key: k,
+      mean,
+      positiveCount,
+      filledCount,
+      total
+    });
+  }
+
+  // critère null dans une partie ou dans la totalité des fragments
+  if (nullCount > 0) {
+    nullCriteria.push({
+      key: k,
+      kind: 'null',
+      count: nullCount,
+      total
+    });
+  }
+});
+
+  TEXT_KEYS.forEach(k => {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
+
+    fragmentInstances.forEach(f => {
+      const arr = parseMultiText(f?.properties?.[k]) || [];
+      arr.forEach(tok => {
+        textCounts[k][tok] = (textCounts[k][tok] || 0) + 1;
+      });
+    });
+  });
+
+  const textCriteria = [];
+  TEXT_KEYS.forEach(k => {
+    Object.entries(textCounts[k]).forEach(([token, count]) => {
+      textCriteria.push({ key: k, token, count, total });
+    });
+  });
+
+  textCriteria.sort((a, b) => b.count - a.count);
+
+  sharedCriteria.sort((a, b) => {
+    if (b.positiveCount !== a.positiveCount) return b.positiveCount - a.positiveCount;
+    return b.mean - a.mean;
+  });
+
+  nullCriteria.sort((a, b) => b.count - a.count);
+
+  return {
+    sharedCriteria: sharedCriteria.slice(0, 10),
+    nullCriteria: nullCriteria.slice(0, 10),
+    textCriteria: textCriteria.slice(0, 10),
+    buildingContext: computeSimplePatternBuildingContext(occs)
+  };
+}
+
+function computeSimplePatternBuildingContext(occs) {
+  let noNearbyCount = 0;
+  let totalFragments = 0;
+
+  const stateCounts = {};
+  const functionCounts = {};
+
+  let weightedDistSum = 0;
+  let weightedDistCount = 0;
+
+  (occs || []).forEach(ag => {
+    const fragCount = ag.fragmentsCount || 0;
+    totalFragments += fragCount;
+
+    const motifs = ag?.fragmentsAgg?.buildingMotifs || {};
+    const stats = ag?.fragmentsAgg?.buildingContextStats || {};
+
+    const noHere = motifs['frag_building:none'] || 0;
+    noNearbyCount += noHere;
+
+    Object.entries(motifs).forEach(([k, v]) => {
+      if (k.startsWith('frag_building_state:')) {
+        const label = k.replace('frag_building_state:', '');
+        stateCounts[label] = (stateCounts[label] || 0) + v;
+      }
+
+      if (k.startsWith('frag_building_function:')) {
+        const label = k.replace('frag_building_function:', '');
+        functionCounts[label] = (functionCounts[label] || 0) + v;
+      }
+    });
+
+    const linkedFragments = Math.max(0, fragCount - noHere);
+    if (stats.avgBuildingDistance !== null && stats.avgBuildingDistance !== undefined && linkedFragments > 0) {
+      weightedDistSum += stats.avgBuildingDistance * linkedFragments;
+      weightedDistCount += linkedFragments;
+    }
+  });
+
+  return {
+    totalFragments,
+    noNearbyCount,
+    avgDistance: weightedDistCount ? (weightedDistSum / weightedDistCount) : null,
+    topStates: topEntries(stateCounts, 3),
+    topFunctions: topEntries(functionCounts, 3)
+  };
+}
+
+/*==================================================
+=                PANNEAU AGENCEMENT                =
+==================================================*/
+
+function renderAgencementPanel(panel, ag, { byFragId, byBldId } = {}) {
+  panel.innerHTML = '';
+
+  const h2 = document.createElement('h2');
+  h2.textContent = ag.id;
+  panel.appendChild(h2);
+
+  const meta = document.createElement('p');
+  meta.innerHTML = `<strong>${ag.fragmentsCount}</strong> fragments • <strong>${ag.buildingsCount}</strong> bâtiments • rayon ${(ag.radiusM || 0).toFixed(0)} m`;
+  panel.appendChild(meta);
+
+  // Patterns
+  const pP = document.createElement('p');
+  const pList = (ag.patternIds || []).slice().sort((a,b)=>parseInt(a.replace('P',''),10)-parseInt(b.replace('P',''),10));
+  pP.innerHTML = `<strong>Patterns :</strong> ${pList.length ? pList.join(', ') : '—'}`;
+  panel.appendChild(pP);
+
+  // Fragments
+  const hF = document.createElement('h3');
+  hF.textContent = 'Fragments inclus';
+  panel.appendChild(hF);
+
+  const fragBox = document.createElement('div');
+  (ag.fragmentIds || []).forEach(fid => {
+    const f = byFragId?.get(String(fid).trim());
+    const row = document.createElement('div');
+    row.className = 'member-row';
+
+    const thumb = document.createElement('div');
+    thumb.className = 'member-thumb';
+    const photoUrl = f ? normalizePhotos(f.properties?.photos)[0] : null;
+    if (photoUrl) thumb.style.backgroundImage = `url("${photoUrl}")`;
+
+    const right = document.createElement('div');
+    right.className = 'member-right';
+
+    const title = document.createElement('div');
+    title.className = 'member-title';
+    title.textContent = f ? (f.properties?.name || fid) : fid;
+
+    const info = document.createElement('div');
+    info.className = 'member-info';
+    info.textContent = f ? (f.properties?.id || fid) : fid;
+
+    right.append(title, info);
+    row.append(thumb, right);
+
+    row.addEventListener('click', () => {
+      if (f) openFragmentWithPatternsTabs(f.properties);
+    });
+
+    fragBox.appendChild(row);
+  });
+  panel.appendChild(fragBox);
+
+  // Bâtiments (liste simple)
+  const hB = document.createElement('h3');
+  hB.textContent = 'Bâtiments inclus';
+  panel.appendChild(hB);
+
+  const bBox = document.createElement('div');
+  const bIds = (ag.buildingIds || []);
+  if (!bIds.length) {
+    const none = document.createElement('div');
+    none.style.color = '#aaa';
+    none.textContent = '— Aucun bâtiment dans ce périmètre.';
+    bBox.appendChild(none);
+  } else {
+    bIds.slice(0, 30).forEach(bid => {
+      const b = byBldId?.get(String(bid).trim());
+      const props = b?.properties || {};
+      const line = document.createElement('div');
+      line.style.color = '#ddd';
+      line.style.fontSize = '12px';
+      line.style.padding = '2px 0';
+      line.textContent = `${bid} — ${props.fonction || props.fonction === '' ? props.fonction : (props['fonction'] || '—')} — ${props['état'] || props.etat || '—'}`;
+      bBox.appendChild(line);
+    });
+
+    if (bIds.length > 30) {
+      const more = document.createElement('div');
+      more.style.color = '#aaa';
+      more.textContent = `… +${bIds.length - 30} autres`;
+      bBox.appendChild(more);
+    }
+  }
+  panel.appendChild(bBox);
+
+  // Signature de l’agencement (déjà calculée)
+const hS = document.createElement('h3');
+hS.textContent = 'Signature relationnelle';
+  panel.appendChild(hS);
+
+  const sBox = document.createElement('div');
+  sBox.className = 'pattern-crit-block';
+
+  const relBox = document.createElement('div');
+relBox.className = 'pattern-crit-block';
+relBox.style.marginTop = '10px';
+
+
+const relTitle = document.createElement('h3');
+relTitle.textContent = 'Structure interne';
+relBox.appendChild(relTitle);
+
+const relInfo = document.createElement('div');
+relInfo.style.fontSize = '12px';
+relInfo.style.color = '#ccc';
+
+const sig = ag.fragmentsAgg || {};
+const shares = sig.dominantPoleShares || {};
+
+relInfo.innerHTML = `
+  <div><strong>Densité relationnelle :</strong> ${Number(sig.density || 0).toFixed(2)}</div>
+  <div><strong>Contraste interne :</strong> ${Number(sig.internalContrast || 0).toFixed(2)}</div>
+  <div><strong>Distance moyenne entre voisins :</strong> ${sig.avgPairDistance !== null ? Number(sig.avgPairDistance).toFixed(1) + ' m' : '—'}</div>
+  <div><strong>Degré local moyen :</strong> ${sig.avgLocalDegree !== null ? Number(sig.avgLocalDegree).toFixed(2) : '—'}</div>
+  <div><strong>Pôles dominants :</strong> PA ${Number(shares.PA || 0).toFixed(2)} • DH ${Number(shares.DH || 0).toFixed(2)} • FS ${Number(shares.FS || 0).toFixed(2)}</div>
+`;
+
+relBox.appendChild(relInfo);
+panel.appendChild(relBox);
+
+// Temporalités
+
+const temporalBox = document.createElement('div');
+temporalBox.className = 'pattern-crit-block';
+temporalBox.style.marginTop = '10px';
+
+const temporalTitle = document.createElement('h3');
+temporalTitle.textContent = 'Composition temporelle';
+temporalBox.appendChild(temporalTitle);
+
+const tProfiles = ag.temporalProfiles || [];
+
+const tCounts = {
+  stable: 0,
+  modified: 0,
+  appeared: 0,
+  disappeared: 0
+};
+
+tProfiles.forEach(tp => {
+  if (!tp?.status) return;
+  tCounts[tp.status] = (tCounts[tp.status] || 0) + 1;
+});
+
+[
+  ['Stables', tCounts.stable],
+  ['Modifiés', tCounts.modified],
+  ['Apparus', tCounts.appeared],
+  ['Disparus', tCounts.disappeared]
+].forEach(([labelText, valText]) => {
+  const line = document.createElement('div');
+  line.className = 'crit-line';
+
+  const lab = document.createElement('span');
+  lab.className = 'crit-label';
+  lab.textContent = labelText + ' :';
+
+  const val = document.createElement('span');
+  val.className = 'crit-value';
+  val.textContent = String(valText);
+
+  line.append(lab, val);
+  temporalBox.appendChild(line);
+});
+
+panel.appendChild(temporalBox);
+
+  (ALL_FUZZY_KEYS || []).forEach(k => {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
+    const v = ag?.fragmentsAgg?.numericMeans?.[k];
+    if (v === null || v === undefined) return;
+
+    const line = document.createElement('div');
+    line.className = 'crit-line';
+
+    const lab = document.createElement('span');
+    lab.className = 'crit-label';
+    lab.textContent = k.replace(/_/g, ' ');
+
+    const val = document.createElement('span');
+    val.className = 'crit-value';
+    val.textContent = '\u00A0' + Number(v).toFixed(2);
+
+    line.append(lab, val);
+    sBox.appendChild(line);
+  });
+
+  (TEXT_KEYS || []).forEach(k => {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) return;
+    const arr = ag?.fragmentsAgg?.textTokens?.[k] || [];
+    if (!arr.length) return;
+
+    const line = document.createElement('div');
+    line.className = 'crit-line';
+
+    const lab = document.createElement('span');
+    lab.className = 'crit-label';
+    lab.textContent = k.replace(/_/g, ' ');
+
+    const val = document.createElement('span');
+    val.className = 'crit-value';
+    val.textContent = '\u00A0' + arr.slice(0, 10).join(', ') + (arr.length > 10 ? '…' : '');
+
+    line.append(lab, val);
+    sBox.appendChild(line);
+  });
+
+  if (!sBox.childNodes.length) {
+    const none = document.createElement('div');
+    none.style.color = '#aaa';
+    none.textContent = '— Rien à afficher.';
+    panel.appendChild(none);
+  } else {
+    panel.appendChild(sBox);
+  }
+}
 
 /*==================================================
 =                PANNEAU DISCOURS                  =
@@ -1126,9 +3901,276 @@ function renderDiscoursePanel(panel, props) {
 }
 
 
+/* ==================================================
+   8) VUES PRINCIPALES
+================================================== */
+
 /***************************************************
-=                  VUE GALERIE (FUZZY)             =
+=                  VUE CARTE FRAGMENTS TEMPORALITES            =
 ***************************************************/
+
+function renderFragmentsMapByTimeMode() {
+  if (!fragmentLayersGroup) return;
+
+  fragmentLayersGroup.clearLayers();
+  allLayers = allLayers.filter(layer => {
+    return !(layer && layer.__isFragmentLayer);
+  });
+
+  const activeZones = getActiveZones ? getActiveZones() : ['montreuil', 'mirail'];
+
+  if (currentFragmentTimeMode === 'trajectories') {
+    ['montreuil', 'mirail'].forEach(zone => {
+      if (!activeZones.includes(zone)) return;
+
+      const pairs = buildTemporalPairsForZone(zone);
+
+      pairs.forEach(pair => {
+        const featureForDisplay = pair.t2 || pair.t1;
+        if (!featureForDisplay) return;
+
+        const styleObj = getTrajectoryStyle(pair.status, zone);
+
+        const layer = L.geoJSON(featureForDisplay, {
+          pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
+            radius: styleObj.radius,
+            color: styleObj.color,
+            weight: styleObj.weight,
+            opacity: styleObj.opacity,
+            fillColor: styleObj.fillColor,
+            fillOpacity: styleObj.fillOpacity
+          }),
+          style: () => ({
+            color: styleObj.color,
+            weight: styleObj.weight,
+            opacity: styleObj.opacity,
+            fillColor: styleObj.fillColor,
+            fillOpacity: styleObj.fillOpacity
+          }),
+          onEachFeature: (_feature, sublayer) => {
+            sublayer.zone = zone;
+            sublayer.__isFragmentLayer = true;
+            sublayer.feature = featureForDisplay;
+
+            allLayers.push(sublayer);
+
+            sublayer.on('click', () => {
+              openTrajectoryFragmentTabs(pair);
+            });
+          }
+        });
+
+        layer.eachLayer(l => fragmentLayersGroup.addLayer(l));
+      });
+    });
+  } else {
+    const datasets = getCurrentFragmentDatasets();
+
+    ['montreuil', 'mirail'].forEach(zone => {
+      if (!activeZones.includes(zone)) return;
+
+      const features = zone === 'montreuil' ? datasets.montreuil : datasets.mirail;
+      const color = getSiteColor(zone);
+
+      const layer = L.geoJSON({ type: 'FeatureCollection', features }, {
+        pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
+          radius: 4,
+          color,
+          weight: 1,
+          opacity: 1,
+          fillColor: color,
+          fillOpacity: 0.8
+        }),
+        style: () => ({
+          color,
+          weight: 0.9,
+          fillOpacity: 0.3
+        }),
+        onEachFeature: (feature, sublayer) => {
+          sublayer.zone = zone;
+          sublayer.__isFragmentLayer = true;
+          allLayers.push(sublayer);
+          sublayer.on('click', () => showDetails(feature.properties));
+        }
+      });
+
+      layer.eachLayer(l => fragmentLayersGroup.addLayer(l));
+    });
+  }
+}
+
+
+
+
+/***************************************************
+=                  VUE GALERIE            =
+***************************************************/
+
+function getAgencementFragments(ag, byFragId) {
+  return (ag?.fragmentIds || [])
+    .map(fid => byFragId.get(String(fid).trim()))
+    .filter(Boolean);
+}
+
+function getAgencementBuildings(ag, byBldId) {
+  return (ag?.buildingIds || [])
+    .map(bid => byBldId.get(String(bid).trim()))
+    .filter(Boolean);
+}
+
+function buildGalleryFragmentCard(f, ag, byFragId, byBldId) {
+  const card = document.createElement('div');
+  card.className = 'gallery-fragment-card';
+
+  const photos = normalizePhotos(f?.properties?.photos);
+  const firstPhoto = photos[0] || null;
+
+  const media = document.createElement('div');
+  media.className = 'gallery-fragment-media';
+
+  if (firstPhoto) {
+    const img = makeImg(firstPhoto, f?.properties?.name || f?.properties?.id || 'fragment');
+    if (img) media.appendChild(img);
+  } else {
+    media.classList.add('is-empty');
+    media.textContent = 'Sans image';
+  }
+
+  const caption = document.createElement('div');
+  caption.className = 'gallery-fragment-caption';
+
+  const fragTitle = document.createElement('div');
+  fragTitle.className = 'gallery-fragment-title';
+  fragTitle.textContent = f?.properties?.id || 'Fragment';
+
+  const fragName = document.createElement('div');
+  fragName.className = 'gallery-fragment-name';
+  fragName.textContent = f?.properties?.name || '';
+
+  caption.append(fragTitle, fragName);
+  card.append(media, caption);
+
+  card.addEventListener('click', () => {
+    openTab({
+      id: `ag-${ag.id}`,
+      title: ag.id,
+      kind: 'agencement',
+      render: (p) => renderAgencementPanel(p, ag, { byFragId, byBldId })
+    });
+  });
+
+  return card;
+}
+
+function buildGalleryBuildingsCell(ag, byBldId) {
+  const cell = document.createElement('div');
+  cell.className = 'gallery-buildings-cell';
+
+  const title = document.createElement('div');
+  title.className = 'gallery-buildings-title';
+  title.textContent = 'Bâtiments';
+
+  const list = document.createElement('div');
+  list.className = 'gallery-buildings-list';
+
+  const buildings = getAgencementBuildings(ag, byBldId);
+
+  if (!buildings.length) {
+    const empty = document.createElement('div');
+    empty.className = 'gallery-building-line is-empty';
+    empty.textContent = '— Aucun bâtiment';
+    list.appendChild(empty);
+  } else {
+    buildings.forEach(b => {
+      const props = b?.properties || {};
+      const line = document.createElement('div');
+      line.className = 'gallery-building-line';
+
+      const bid = props.id || '—';
+      const fonction = props.fonction || props['fonction'] || '—';
+      const etat = props['état'] || props.etat || '—';
+
+      line.textContent = `${bid} — ${fonction} — ${etat}`;
+      list.appendChild(line);
+    });
+  }
+
+  cell.append(title, list);
+  return cell;
+}
+
+function getFragmentSimilarityScore(fa, fb) {
+  if (!fa || !fb) return -1;
+  const va = featureToVector(fa);
+  const vb = featureToVector(fb);
+  return similarityFuzzy(va, vb);
+}
+
+function orderFragmentsByReference(referenceFrags, candidateFrags) {
+  const remaining = [...candidateFrags];
+  const ordered = [];
+
+  // 1) on aligne d'abord sur les fragments de référence
+  referenceFrags.forEach(refFrag => {
+    if (!remaining.length) {
+      ordered.push(null);
+      return;
+    }
+
+    let bestIdx = -1;
+    let bestScore = -1;
+
+    remaining.forEach((candFrag, idx) => {
+      const s = getFragmentSimilarityScore(refFrag, candFrag);
+      if (s > bestScore) {
+        bestScore = s;
+        bestIdx = idx;
+      }
+    });
+
+    if (bestIdx >= 0) {
+      ordered.push(remaining[bestIdx]);
+      remaining.splice(bestIdx, 1);
+    } else {
+      ordered.push(null);
+    }
+  });
+
+  // 2) puis on ajoute les fragments restants à la fin
+  return ordered.concat(remaining);
+}
+
+function buildAlignedFragmentsByAgencement(occs, byFragId) {
+  const rawLists = occs.map(ag => getAgencementFragments(ag, byFragId));
+
+  if (!rawLists.length) return [];
+
+  // colonne de référence = premier agencement du pattern
+  const reference = rawLists[0] || [];
+
+  return rawLists.map((fragList, idx) => {
+    if (idx === 0) return [...fragList]; // la référence garde son ordre
+    return orderFragmentsByReference(reference, fragList);
+  });
+}
+
+
+function getPatternGalleryDatasets() {
+  if (currentPatternGalleryTimeMode === 'T2') {
+    return {
+      montreuil: dataGeojsonT2 || [],
+      mirail: datamGeojsonT2 || []
+    };
+  }
+
+  return {
+    montreuil: dataGeojsonT1 || [],
+    mirail: datamGeojsonT1 || []
+  };
+}
+
+
+
 function showGalleryView() {
   const gallery = document.getElementById('gallery-view');
   gallery.innerHTML = '';
@@ -1136,8 +4178,6 @@ function showGalleryView() {
   const wrapper = document.createElement('div');
   wrapper.className = 'gallery-wrapper';
   gallery.appendChild(wrapper);
-
-  const allFeatures = [...(dataGeojson || []), ...(datamGeojson || [])];
 
   const patternsEntries = Object.entries(patterns || {});
   if (!patternsEntries.length) {
@@ -1149,149 +4189,424 @@ function showGalleryView() {
     return;
   }
 
-  patternsEntries.forEach(([key, pattern]) => {
+  const galleryDatasets = getPatternGalleryDatasets();
+
+  const allFrags = [
+    ...(galleryDatasets.montreuil || []),
+    ...(galleryDatasets.mirail || [])
+  ].filter(f => !f.properties?.isDiscourse && !f.properties?.isBuilding);
+
+  const byFragId = new Map(
+    allFrags.map(f => [String(f.properties?.id || '').trim(), f])
+  );
+
+  const allBlds = [...(batimentsMontreuilGeojson || []), ...(batimentsToulouseGeojson || [])];
+  const byBldId = new Map(
+    allBlds.map(b => [String(b.properties?.id || '').trim(), b])
+  );
+
+  patternsEntries.forEach(([pKey, pData]) => {
+    const occIds = (pData?.occurrences || []).slice();
+    const occs = occIds
+      .map(id => agencementsById.get(id))
+      .filter(Boolean)
+      .sort((a, b) => parseInt(String(a.id).replace('A', ''), 10) - parseInt(String(b.id).replace('A', ''), 10));
+
+    if (!occs.length) return;
+
     const block = document.createElement('section');
     block.className = 'pattern-block';
 
     const title = document.createElement('h3');
     title.className = 'pattern-title';
+    title.textContent = `${pKey} — ${occs.length} agencements`;
 
-    // ---- calcul similarité moyenne du pattern ----
-    const ids = pattern.elements || [];
-    const vecs = ids.map(id => {
-      const f = allFeatures.find(x => x.properties.id === id);
-      return f ? featureToVector(f) : null;
-    }).filter(v => v !== null);
+    const table = document.createElement('div');
+    table.className = 'gallery-table';
 
-    let acc = 0, count = 0;
-    for (let i = 0; i < vecs.length; i++) {
-      for (let j = i + 1; j < vecs.length; j++) {
-        acc += similarityFuzzy(vecs[i], vecs[j]);
-        count++;
-      }
-    }
-    const avgSim = count ? (acc / count) : 0;
+    // En-tête colonnes
+    const head = document.createElement('div');
+    head.className = 'gallery-head';
 
-    title.textContent = `${key} — ${ids.length} fragments — similarité moyenne ${avgSim.toFixed(2)}`;
-
-    const grid = document.createElement('div');
-    grid.className = 'photo-grid';
-
-    ids.forEach(id => {
-      const feature = allFeatures.find(f => f.properties.id === id);
-      if (!feature) return;
-
-      const fragName = feature.properties.name || id || 'Fragment';
-      const photosRaw = normalizePhotos(feature.properties.photos);
-      const photos = photosRaw.filter(Boolean); // enlève les "" éventuels
-
-      // Si le fragment a au moins une photo exploitable
-      if (photos.length) {
-        photos.forEach(photo => {
-          const cell = document.createElement('div');
-          cell.className = 'photo-cell';
-
-          const img = makeImg(photo, fragName);
-          if (img) {
-            img.onclick = () => showDetails(feature.properties);
-            cell.appendChild(img);
-          } else {
-            // URL invalide → carré gris
-            cell.classList.add('no-photo');
-            cell.style.background = '#444';
-            cell.style.display = 'flex';
-            cell.style.alignItems = 'center';
-            cell.style.justifyContent = 'center';
-            cell.style.color = '#ddd';
-            cell.style.fontSize = '11px';
-            cell.style.cursor = 'pointer';
-
-            const label = document.createElement('div');
-            label.textContent = feature.properties.id || '—';
-            cell.appendChild(label);
-
-            cell.onclick = () => showDetails(feature.properties);
-          }
-
-          grid.appendChild(cell);
-        });
-      } else {
-        // AUCUNE photo -> un seul carré gris par fragment
-        const cell = document.createElement('div');
-        cell.className = 'photo-cell no-photo';
-        cell.style.background = '#444';
-        cell.style.display = 'flex';
-        cell.style.alignItems = 'center';
-        cell.style.justifyContent = 'center';
-        cell.style.color = '#ddd';
-        cell.style.fontSize = '11px';
-        cell.style.cursor = 'pointer';
-
-        const label = document.createElement('div');
-        label.innerHTML = `<strong>${feature.properties.id || '—'}</strong><br>${fragName}`;
-        label.style.textAlign = 'center';
-
-        cell.appendChild(label);
-        cell.onclick = () => showDetails(feature.properties);
-
-        grid.appendChild(cell);
-      }
+    occs.forEach(ag => {
+      const headCell = document.createElement('div');
+      headCell.className = 'gallery-head-cell';
+      headCell.innerHTML = `<strong>${ag.id}</strong><br>${ag.fragmentsCount} fragments`;
+      head.appendChild(headCell);
     });
 
-    block.append(title, grid);
+    table.appendChild(head);
+
+    // Prépare fragments par agencement
+ const fragmentsByAg = buildAlignedFragmentsByAgencement(occs, byFragId);
+const maxRows = Math.max(...fragmentsByAg.map(arr => arr.filter(Boolean).length), 0);
+
+const colTemplate = `repeat(${occs.length}, minmax(240px, 320px))`;
+head.style.gridTemplateColumns = colTemplate;
+
+const body = document.createElement('div');
+body.className = 'gallery-body';
+
+for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
+  const row = document.createElement('div');
+  row.className = 'gallery-row';
+  row.style.gridTemplateColumns = colTemplate;
+
+  occs.forEach((ag, colIndex) => {
+    const cell = document.createElement('div');
+    cell.className = 'gallery-cell';
+
+    const frag = fragmentsByAg[colIndex][rowIndex];
+
+    if (frag) {
+      cell.appendChild(buildGalleryFragmentCard(frag, ag, byFragId, byBldId));
+    } else {
+      cell.classList.add('is-empty');
+    }
+
+    row.appendChild(cell);
+  });
+
+  body.appendChild(row);
+}
+
+table.appendChild(body);
+
+// Ligne bâtiments
+const buildingsRow = document.createElement('div');
+buildingsRow.className = 'gallery-buildings-row';
+buildingsRow.style.gridTemplateColumns = colTemplate;
+
+occs.forEach(ag => {
+  const bCellWrap = document.createElement('div');
+  bCellWrap.className = 'gallery-buildings-wrap';
+  bCellWrap.appendChild(buildGalleryBuildingsCell(ag, byBldId));
+  buildingsRow.appendChild(bCellWrap);
+});
+
+table.appendChild(buildingsRow);
+
+    block.append(title, table);
     wrapper.appendChild(block);
   });
 }
 
 
 
-
 /*==================================================
 =                  VUE PROXÉMIQUE                  =
 ==================================================*/
-const FUZZY_GROUPS = {
-  PA: [
-    "PA_P1_intensitesoin","PA_P1_frequencegestes","PA_P1_degrecooperation",
-    "PA_P2_degretransformation","PA_P2_perrenite","PA_P2_autonomie",
-    "PA_P3_intensiteusage","PA_P3_frequenceusage","PA_P3_diversitepublic","PA_P3_conflitusage"
-  ],
-  DH: [
-    "DH_P1_degreinformalite","DH_P1_echellepratique","DH_P1_degremutualisation",
-    "DH_P2_degréorganisation","DH_P2_porteepolitique","DH_P2_effetspatial",
-    "DH_P3_attachement","DH_P4_intensiteflux"
-  ],
-  FS: [
-    "FS_P1_presenceinstitutionnelle","FS_P1_intensitecontrole",
-    "FS_P2_abandon","FS_P3_pressionfonciere"
-  ]
-};
 
-function computeGroupScore(ids, groupKeys) {
-  const all = [...dataGeojson, ...datamGeojson];
 
-  let sum = 0, count = 0;
+/***************************************************
+ *  PROXÉMIE DES FRAGMENTS
+ ***************************************************/
 
-  ids.forEach(id => {
-    const f = all.find(x => x.properties.id === id);
-    groupKeys.forEach(k => {
-      const v = parseFuzzy(f.properties[k]);
-      if (v !== null) {
-        sum += v;
-        count++;
-      }
+function showFragmentProxemicView() {
+  fragmentProxemicView.innerHTML = "";
+
+  const rect = fragmentProxemicView.getBoundingClientRect();
+
+  const layout = buildFragmentProxemicLayoutData({
+    width: rect.width,
+    height: rect.height,
+    timeMode: currentFragmentTimeMode
+  });
+
+  const {
+    data: proxData,
+    W, H, CX, CY, R_BASE,
+    config
+  } = layout;
+
+  const { SUB_ORDER, SUB_LABELS, SECTORS } = config;
+
+  if (!proxData.length) {
+    fragmentProxemicView.innerHTML = "<div style='color:#aaa;padding:10px'>Aucun fragment.</div>";
+    return;
+  }
+
+  function angleForSub(cat, sub) {
+    const order = SUB_ORDER[cat];
+    const idx = order.indexOf(sub);
+
+    if (idx === -1) {
+      const s = SECTORS[cat].start;
+      const e = SECTORS[cat].end;
+      return (s + e) / 2;
+    }
+
+    const s = SECTORS[cat].start;
+    const e = SECTORS[cat].end;
+    const slice = (e - s) / order.length;
+    const subStart = s + idx * slice;
+    const subEnd = subStart + slice;
+
+    return (subStart + subEnd) / 2;
+  }
+
+  function getProxemicNodeStyle(d) {
+    if (currentFragmentTimeMode !== 'trajectories') {
+      return {
+        fill: '#fff',
+        fillOpacity: 1,
+        stroke: '#222',
+        strokeOpacity: 1
+      };
+    }
+
+    const zone = d?.feature?.properties?.zone || d?.trajectoryPair?.zone || 'montreuil';
+    const status = d?.trajectoryStatus || 'identical';
+    const style = getTrajectoryStyle(status, zone);
+
+    return {
+      fill: style.fillColor,
+      fillOpacity: style.fillOpacity,
+      stroke: style.color,
+      strokeOpacity: style.opacity
+    };
+  }
+
+  const svg = d3.select("#fragment-proxemic-view")
+    .append("svg")
+    .attr("width", W)
+    .attr("height", H);
+
+  const world = svg.append("g");
+  const slicesLayer = world.append("g");
+  const trajectoryLayer = world.append("g");
+  const nodesLayer = world.append("g");
+  const labelsLayer = world.append("g");
+
+  svg.call(
+    d3.zoom()
+      .scaleExtent([0.4, 4])
+      .on("zoom", ev => world.attr("transform", ev.transform))
+  );
+
+  const arc = d3.arc()
+    .innerRadius(0)
+    .outerRadius(R_BASE);
+
+  const sectors = [
+    { key: "PA", label: "Pratiques actives" },
+    { key: "FS", label: "Forces structurantes" },
+    { key: "DH", label: "Dynamiques hybrides" }
+  ];
+
+  slicesLayer.selectAll("path.sector")
+    .data(sectors)
+    .join("path")
+    .attr("class", "sector")
+    .attr("d", d => arc({
+      startAngle: SECTORS[d.key].start + Math.PI / 2,
+      endAngle: SECTORS[d.key].end + Math.PI / 2
+    }))
+    .attr("transform", `translate(${CX},${CY})`)
+    .style("fill", "none")
+    .style("stroke", "rgba(255,255,255,0.45)")
+    .style("stroke-width", 2);
+
+  sectors.forEach(s => {
+    const cat = s.key;
+    const list = SUB_ORDER[cat];
+    if (!list) return;
+
+    const slice = (SECTORS[cat].end - SECTORS[cat].start) / list.length;
+
+    for (let i = 1; i < list.length; i++) {
+      const ang = SECTORS[cat].start + i * slice;
+
+      slicesLayer.append("line")
+        .attr("x1", CX)
+        .attr("y1", CY)
+        .attr("x2", CX + R_BASE * Math.cos(ang))
+        .attr("y2", CY + R_BASE * Math.sin(ang))
+        .style("stroke", "rgba(255,255,255,0.25)")
+        .style("stroke-width", 1);
+    }
+  });
+
+  const R_LABEL = R_BASE * 1.12;
+  const R_LABEL_MAIN = R_BASE * 1.32;
+
+  sectors.forEach(s => {
+    const ang = (SECTORS[s.key].start + SECTORS[s.key].end) / 2;
+    const x = CX + R_LABEL_MAIN * Math.cos(ang);
+    const y = CY + R_LABEL_MAIN * Math.sin(ang);
+
+    let deg = (ang * 180 / Math.PI) + 90;
+    if (deg > 90 && deg < 270) deg += 180;
+
+    labelsLayer.append("text")
+      .attr("x", x)
+      .attr("y", y)
+      .attr("transform", `rotate(${deg}, ${x}, ${y})`)
+      .text(s.label)
+      .style("fill", "#fff")
+      .style("font-size", "22px")
+      .style("font-weight", "900")
+      .style("text-anchor", "middle")
+      .style("pointer-events", "none");
+  });
+
+  Object.entries(SUB_ORDER).forEach(([cat, subs]) => {
+    subs.forEach(sub => {
+      const ang = angleForSub(cat, sub);
+      const x = CX + R_LABEL * Math.cos(ang);
+      const y = CY + R_LABEL * Math.sin(ang);
+
+      let deg = (ang * 180 / Math.PI) + 90;
+      if (deg > 90 && deg < 270) deg += 180;
+
+      labelsLayer.append("text")
+        .attr("x", x)
+        .attr("y", y)
+        .attr("transform", `rotate(${deg}, ${x}, ${y})`)
+        .text(SUB_LABELS[sub] || sub)
+        .style("fill", "#fff")
+        .style("font-size", "11px")
+        .style("font-weight", "600")
+        .style("text-anchor", "middle")
+        .style("pointer-events", "none");
     });
   });
 
-  return count ? (sum / count) : 0;
+  if (currentFragmentTimeMode === 'trajectories') {
+    const ghostData = proxData.filter(d => d.hasGhost);
+
+    trajectoryLayer.selectAll("line.fragment-trajectory")
+      .data(ghostData)
+      .join("line")
+      .attr("class", "fragment-trajectory")
+      .attr("x1", d => d.ghostX)
+      .attr("y1", d => d.ghostY)
+      .attr("x2", d => d.x)
+      .attr("y2", d => d.y)
+      .style("stroke", d => {
+        const zone = d?.feature?.properties?.zone || 'montreuil';
+        return getTrajectoryStyle('modified', zone).color;
+      })
+      .style("stroke-width", 1.5)
+      .style("stroke-dasharray", "4 4")
+      .style("opacity", 0.9)
+      .style("pointer-events", "none");
+
+    trajectoryLayer.selectAll("circle.fragment-ghost")
+      .data(ghostData)
+      .join("circle")
+      .attr("class", "fragment-ghost")
+      .attr("cx", d => d.ghostX)
+      .attr("cy", d => d.ghostY)
+      .attr("r", 8)
+      .style("fill", "none")
+      .style("stroke", d => {
+        const zone = d?.feature?.properties?.zone || 'montreuil';
+        return getTrajectoryStyle('modified', zone).color;
+      })
+      .style("stroke-width", 1.4)
+      .style("stroke-opacity", 0.65)
+      .style("pointer-events", "none");
+  }
+
+  const nodes = nodesLayer.selectAll("g.node")
+    .data(proxData)
+    .join("g")
+    .attr("class", "node")
+    .attr("transform", d => `translate(${d.x},${d.y})`);
+
+  nodes.append("circle")
+    .attr("r", 8)
+    .style("fill", d => getProxemicNodeStyle(d).fill)
+    .style("fill-opacity", d => getProxemicNodeStyle(d).fillOpacity)
+    .style("stroke", d => getProxemicNodeStyle(d).stroke)
+    .style("stroke-opacity", d => getProxemicNodeStyle(d).strokeOpacity)
+    .style("stroke-width", 1.2)
+    .style("cursor", "pointer");
+
+  nodes.append("text")
+    .text(d => d.id)
+    .attr("dy", "0.35em")
+    .style("text-anchor", "middle")
+    .style("font-size", "7px")
+    .style("font-weight", "bold")
+    .style("pointer-events", "none");
+
+  let selected = null;
+
+  function highlight(id) {
+    nodes.style("opacity", n => n.id === id ? 1 : 0.15);
+
+    if (currentFragmentTimeMode === 'trajectories') {
+      trajectoryLayer.selectAll("line.fragment-trajectory, circle.fragment-ghost")
+        .style("opacity", d => d.id === id ? 1 : 0.12);
+    }
+  }
+
+  function reset() {
+    if (selected) return;
+    nodes.style("opacity", 1);
+
+    if (currentFragmentTimeMode === 'trajectories') {
+      trajectoryLayer.selectAll("line.fragment-trajectory")
+        .style("opacity", 0.9);
+
+      trajectoryLayer.selectAll("circle.fragment-ghost")
+        .style("opacity", 1);
+    }
+  }
+
+  nodes
+    .on("mouseenter", function(ev, d) {
+      if (selected) return;
+      highlight(d.id);
+    })
+    .on("mouseleave", function() {
+      if (selected) return;
+      reset();
+    })
+    .on("click", (ev, d) => {
+      ev.stopPropagation();
+
+      if (unitCreation.active && unitCreation.mode === 'proxemic') {
+        const fragId = d?.feature?.properties?.id || d?.id;
+        const list = d?.patterns?.length ? d.patterns : getPatternsForFragment(fragId);
+
+        const chosen = choosePatternKeyFromList(
+          list,
+          'Choisis le pattern à isoler dans Unité de projet :'
+        );
+
+        if (!chosen) return;
+
+        handleUnitSelection(d.feature, chosen);
+        return;
+      }
+
+      if (selected === d.id) {
+        selected = null;
+        reset();
+      } else {
+        selected = d.id;
+        highlight(d.id);
+      }
+
+      if (currentFragmentTimeMode === 'trajectories' && d.trajectoryPair) {
+        openTrajectoryFragmentTabs(d.trajectoryPair);
+      } else {
+        openFragmentWithPatternsTabs(d.feature.properties);
+      }
+    });
+
+  svg.on("click", () => {
+    selected = null;
+    reset();
+  });
 }
 
 
 /***************************************************
- *  PROXÉMIE 2025 — Concentrique, Fuzzy, Interactive
- *  - Disparition si : zone décochée OU aucun critère actif
- *  - 3 anneaux : PA (intérieur) • DH (médian) • FS (extérieur)
- *  - Patterns = anneaux colorés
- *  - Pan / zoom infini
+ *  PROXÉMIE 
  ***************************************************/
 
 // Ouvre l’onglet fragment + tous ses patterns associés
@@ -1330,31 +4645,39 @@ function openFragmentWithPatternsTabs(fProps) {
 }
 
 
-function showProxemicView() {
+// Ouvre l’onglet fragment t1 et/ou t2 d’une paire temporelle
+function openTrajectoryFragmentTabs(pair) {
+  if (!pair) return;
 
-  /* -----------------------------------------------------------
-   * 0) RESET + DIMENSIONS
-   * ----------------------------------------------------------- */
-  proxemicView.innerHTML = "";
+  clearAllTabbedTabs();
+  closeSidebars();
 
-  const rect = proxemicView.getBoundingClientRect();
-  const W = rect.width;
-  const H = rect.height;
+  if (pair.t1) {
+    openTab({
+      id: `frag-${pair.id}-T1`,
+      title: `${pair.id} · T1`,
+      kind: 'fragment',
+      render: (panel) => renderFragmentPanel(panel, pair.t1.properties)
+    });
+  }
 
-  // Centre visuel légèrement abaissé
-  const CX = W * 0.50;
-  const CY = H * 0.53;
+  if (pair.t2) {
+    openTab({
+      id: `frag-${pair.id}-T2`,
+      title: `${pair.id} · T2`,
+      kind: 'fragment',
+      render: (panel) => renderFragmentPanel(panel, pair.t2.properties)
+    });
+  }
 
-  // On agrandit volontairement le camembert
-  const R_BASE  = Math.min(W, H) * 0.42;
-  const R_INNER = R_BASE * 0.15;
-  const R_OUTER = R_BASE * 0.95;
+  if (pair.t1) focusTab(`frag-${pair.id}-T1`);
+  else if (pair.t2) focusTab(`frag-${pair.id}-T2`);
+}
 
+
+function getFragmentProxemicConfig() {
   const TWO_PI = Math.PI * 2;
 
-  /* -----------------------------------------------------------
-   * 1) DÉFINITION STRUCTURELLE DES PÔLES + CLÉS FUZZY
-   * ----------------------------------------------------------- */
   const GROUP_DETAILS = {
     PA: {
       entretien: [
@@ -1364,8 +4687,7 @@ function showProxemicView() {
         "PA_P2_degretransformation", "PA_P2_perrenite", "PA_P2_autonomie"
       ],
       appr_sociale: [
-        "PA_P3_intensiteusage", "PA_P3_frequenceusage",
-        "PA_P3_diversitepublic", "PA_P3_conflitusage"
+        "PA_P3_intensiteusage", "PA_P3_frequenceusage", "PA_P3_diversitepublic", "PA_P3_conflitusage"
       ]
     },
     DH: {
@@ -1402,32 +4724,57 @@ function showProxemicView() {
   };
 
   const SUB_LABELS = {
-    entretien:     "Entretien / care",
+    entretien: "Entretien / care",
     appr_spatiale: "Appropriation spatiale",
-    appr_sociale:  "Appropriation sociale",
-    econ_subs:     "Éco. de subsistance",
-    contest:       "Contestation / militantisme",
-    symbolique:    "Symbolique",
-    mobilites:     "Mobilités",
-    gouvernance:   "Cadres de gouvernance",
-    vacance:       "Vacance",
-    marche:        "Économie de marché"
+    appr_sociale: "Appropriation sociale",
+    econ_subs: "Éco. de subsistance",
+    contest: "Contestation / militantisme",
+    symbolique: "Symbolique",
+    mobilites: "Mobilités",
+    gouvernance: "Cadres de gouvernance",
+    vacance: "Vacance",
+    marche: "Économie de marché"
   };
 
   const SECTORS = {
-    PA: {
-      start: -Math.PI/2,
-      end:   -Math.PI/2 + TWO_PI/3
-    },
-    FS: {
-      start: -Math.PI/2 + TWO_PI/3,
-      end:   -Math.PI/2 + 2*TWO_PI/3
-    },
-    DH: {
-      start: -Math.PI/2 + 2*TWO_PI/3,
-      end:   -Math.PI/2 + TWO_PI
-    }
+    PA: { start: -Math.PI / 2, end: -Math.PI / 2 + TWO_PI / 3 },
+    FS: { start: -Math.PI / 2 + TWO_PI / 3, end: -Math.PI / 2 + 2 * TWO_PI / 3 },
+    DH: { start: -Math.PI / 2 + 2 * TWO_PI / 3, end: -Math.PI / 2 + TWO_PI }
   };
+
+  return {
+    GROUP_DETAILS,
+    SUB_ORDER,
+    SUB_LABELS,
+    SECTORS,
+    TWO_PI
+  };
+}
+
+function buildFragmentProxemicLayoutData({
+  width,
+  height,
+  timeMode = currentFragmentTimeMode
+}) {
+  const {
+    GROUP_DETAILS,
+    SUB_ORDER,
+    SECTORS
+  } = getFragmentProxemicConfig();
+
+  const W = width;
+  const H = height;
+
+  const CX = W * 0.50;
+  const CY = H * 0.53;
+
+  const R_BASE  = Math.min(W, H) * 0.42;
+  const R_INNER = R_BASE * 0.15;
+  const R_OUTER = R_BASE * 0.95;
+
+  function cleanId(id) {
+    return id ? String(id).trim().toUpperCase() : "";
+  }
 
   function poleCategory(sub) {
     if (SUB_ORDER.PA.includes(sub)) return "PA";
@@ -1438,27 +4785,70 @@ function showProxemicView() {
 
   function computeSubScores(feature) {
     const scores = {};
-    for (const [zone, subs] of Object.entries(GROUP_DETAILS)) {
-      for (const [subName, keys] of Object.entries(subs)) {
-        let sum = 0, n = 0;
-        for (const k of keys) {
-          if (!ACTIVE_FUZZY_KEYS.has(k)) continue;
-          const v = parseFuzzy(feature.properties[k]);
-          if (v !== null) { sum += v; n++; }
-        }
-        scores[subName] = n ? (sum / n) : null;
 
+    for (const [, subs] of Object.entries(GROUP_DETAILS)) {
+      for (const [subName, keys] of Object.entries(subs)) {
+        let sum = 0;
+        let n = 0;
+
+        for (const k of keys) {
+          if (!ACTIVE_CRITERIA_KEYS.has(k)) continue;
+          const v = parseFuzzy(feature.properties?.[k]);
+          if (v !== null) {
+            sum += v;
+            n++;
+          }
+        }
+
+        scores[subName] = n ? (sum / n) : null;
       }
     }
+
     return scores;
+  }
+
+  function hasAnyActiveCriterion(feature) {
+    for (const k of ALL_FUZZY_KEYS) {
+      if (!ACTIVE_CRITERIA_KEYS.has(k)) continue;
+      if (parseFuzzy(feature.properties?.[k]) !== null) return true;
+    }
+    return false;
+  }
+
+  function getBestSubInfo(feature) {
+    if (!feature || !feature.properties) return null;
+
+    const subScores = computeSubScores(feature);
+
+    let bestSub = null;
+    let bestScore = -Infinity;
+
+    Object.entries(subScores).forEach(([sub, val]) => {
+      if (val !== null && val > bestScore) {
+        bestScore = val;
+        bestSub = sub;
+      }
+    });
+
+    if (!bestSub) return null;
+
+    const cat = poleCategory(bestSub);
+    if (!cat) return null;
+
+    return {
+      bestSub,
+      bestScore,
+      category: cat
+    };
   }
 
   function angleForSub(cat, sub) {
     const order = SUB_ORDER[cat];
-    const idx   = order.indexOf(sub);
+    const idx = order.indexOf(sub);
 
     if (idx === -1) {
-      const s = SECTORS[cat].start, e = SECTORS[cat].end;
+      const s = SECTORS[cat].start;
+      const e = SECTORS[cat].end;
       return (s + e) / 2;
     }
 
@@ -1466,32 +4856,18 @@ function showProxemicView() {
     const e = SECTORS[cat].end;
     const slice = (e - s) / order.length;
     const subStart = s + idx * slice;
-    const subEnd   = subStart + slice;
+    const subEnd = subStart + slice;
 
     return (subStart + subEnd) / 2;
   }
 
-  function hasAnyActiveCriterion(feature) {
-    for (const k of ALL_FUZZY_KEYS) {
-      if (!ACTIVE_FUZZY_KEYS.has(k)) continue;
-      if (parseFuzzy(feature.properties[k]) !== null) return true;
-    }
-    return false;
-  }
+ let raw = getFragmentProxemicSourceFeatures(timeMode);
 
-  function cleanId(id) {
-    return id ? String(id).trim().toUpperCase() : "";
-  }
-
-  /* -----------------------------------------------------------
-   * 2) SÉLECTION DES FRAGMENTS
-   * ----------------------------------------------------------- */
-  const raw = [...(dataGeojson||[]), ...(datamGeojson||[])];
-  const zonesActive = getActiveZones ? getActiveZones() : ["mirail","montreuil"];
+  const zonesActive = getActiveZones ? getActiveZones() : ["mirail", "montreuil"];
 
   let features = raw
     .filter(f => f.properties && f.properties.id)
-    .filter(f => !f.properties.isDiscourse)
+    .filter(f => !f.properties.isDiscourse && !f.properties.isBuilding)
     .map(f => {
       f.properties.id = cleanId(f.properties.id);
       return f;
@@ -1509,62 +4885,248 @@ function showProxemicView() {
   features = features.filter(f => hasAnyActiveCriterion(f));
 
   if (!features.length) {
+    return {
+      data: [],
+      W, H, CX, CY, R_BASE, R_INNER, R_OUTER,
+      minScore: 0,
+      maxScore: 1,
+      config: getFragmentProxemicConfig()
+    };
+  }
+
+  const proxData = [];
+  let minScore = Infinity;
+  let maxScore = -Infinity;
+
+  features.forEach(f => {
+    const bestInfo = getBestSubInfo(f);
+    if (!bestInfo) return;
+
+    minScore = Math.min(minScore, bestInfo.bestScore);
+    maxScore = Math.max(maxScore, bestInfo.bestScore);
+
+    proxData.push({
+      id: f.properties.id,
+      feature: f,
+      bestSub: bestInfo.bestSub,
+      bestScore: bestInfo.bestScore,
+      category: bestInfo.category,
+      trajectoryStatus: f.properties?.__trajectoryStatus || null,
+      trajectoryPair: f.properties?.__trajectoryPair || null
+    });
+  });
+
+  if (!proxData.length) {
+    return {
+      data: [],
+      W, H, CX, CY, R_BASE, R_INNER, R_OUTER,
+      minScore: 0,
+      maxScore: 1,
+      config: getFragmentProxemicConfig()
+    };
+  }
+
+  if (minScore === maxScore) minScore = maxScore - 1;
+
+  proxData.forEach(d => {
+    const n = (d.bestScore - minScore) / (maxScore - minScore || 1);
+    const radius = R_INNER + n * (R_OUTER - R_INNER);
+    const theta = angleForSub(d.category, d.bestSub);
+
+    d.targetRadius = radius;
+    d.targetTheta = theta;
+    d.x = CX + radius * Math.cos(theta);
+    d.y = CY + radius * Math.sin(theta);
+  });
+
+  const sim = d3.forceSimulation(proxData)
+    .force("x", d3.forceX(d => d.x).strength(1))
+    .force("y", d3.forceY(d => d.y).strength(1))
+    .force("collide", d3.forceCollide(15))
+    .stop();
+
+  for (let i = 0; i < 200; i++) sim.tick();
+
+  proxData.forEach(d => {
+    d.x = d.x + (d.vx || 0);
+    d.y = d.y + (d.vy || 0);
+  });
+
+  if (timeMode === 'trajectories') {
+    proxData.forEach(d => {
+      if (d.trajectoryStatus !== 'modified') return;
+
+      const pair = d.trajectoryPair;
+      const f1 = pair?.t1 || null;
+      if (!f1 || !hasAnyActiveCriterion(f1)) return;
+
+      const bestInfoT1 = getBestSubInfo(f1);
+      if (!bestInfoT1) return;
+
+      const n1 = (bestInfoT1.bestScore - minScore) / (maxScore - minScore || 1);
+      const radius1 = R_INNER + n1 * (R_OUTER - R_INNER);
+      const theta1 = angleForSub(bestInfoT1.category, bestInfoT1.bestSub);
+
+      d.ghostX = CX + radius1 * Math.cos(theta1);
+      d.ghostY = CY + radius1 * Math.sin(theta1);
+      d.hasGhost = true;
+    });
+  }
+
+  return {
+    data: proxData,
+    W, H, CX, CY, R_BASE, R_INNER, R_OUTER,
+    minScore,
+    maxScore,
+    config: getFragmentProxemicConfig()
+  };
+}
+
+
+function showProxemicView() {
+
+  /* -----------------------------------------------------------
+   * 0) RESET + DIMENSIONS
+   * ----------------------------------------------------------- */
+  proxemicView.innerHTML = "";
+
+  const rect = proxemicView.getBoundingClientRect();
+  const W = rect.width;
+  const H = rect.height;
+
+  // IMPORTANT :
+  // la proxémie patterns est TOUJOURS construite sur la vue trajectoires,
+  // sans jamais dépendre du mode T1 / T2 / trajectoires choisi côté fragments.
+  const layout = buildFragmentProxemicLayoutData({
+    width: W,
+    height: H,
+    timeMode: 'trajectories'
+  });
+
+  const {
+    data: proxDataBase,
+    CX, CY, R_BASE,
+    config
+  } = layout;
+
+  const { SUB_ORDER, SUB_LABELS, SECTORS } = config;
+
+  if (!proxDataBase.length) {
     proxemicView.innerHTML = "<div style='color:#aaa;padding:10px'>Aucun fragment.</div>";
     return;
   }
 
   /* -----------------------------------------------------------
-   * 3) CALCUL : SOUS-PÔLE DOMINANT + RAYON
+   * 1) HELPERS LOCAUX
    * ----------------------------------------------------------- */
-  const proxCandidates = [];
-  let minScore = Infinity, maxScore = -Infinity;
+  function angleForSub(cat, sub) {
+    const order = SUB_ORDER[cat];
+    const idx = order.indexOf(sub);
 
-  features.forEach(f => {
-    const subScores = computeSubScores(f);
+    if (idx === -1) {
+      const s = SECTORS[cat].start;
+      const e = SECTORS[cat].end;
+      return (s + e) / 2;
+    }
 
-    let bestSub = null, bestScore = -Infinity;
-Object.entries(subScores).forEach(([sub, val]) => {
-  if (val !== null && val > bestScore) {
-    bestScore = val;
-    bestSub = sub;
+    const s = SECTORS[cat].start;
+    const e = SECTORS[cat].end;
+    const slice = (e - s) / order.length;
+    const subStart = s + idx * slice;
+    const subEnd = subStart + slice;
+
+    return (subStart + subEnd) / 2;
   }
-});
 
+  // IMPORTANT :
+  // les bulles centrales de la vue patterns sont TOUJOURS blanches.
+  function getPatternNodeBaseStyle() {
+    return {
+      fill: '#ffffff',
+      fillOpacity: 1,
+      stroke: '#222222',
+      strokeOpacity: 1
+    };
+  }
 
-    if (!bestSub) return;
+  proxemicView.style.position = proxemicView.style.position || "relative";
 
-    const cat = poleCategory(bestSub);
-    if (!cat) return;
+  const diffTip = d3.select(proxemicView)
+    .append("div")
+    .attr("class", "diff-tooltip")
+    .style("position", "absolute")
+    .style("display", "none")
+    .style("pointer-events", "none")
+    .style("z-index", "9999");
 
-    if (bestScore < minScore) minScore = bestScore;
-    if (bestScore > maxScore) maxScore = bestScore;
+  function moveDiffTip(ev) {
+    const rect = proxemicView.getBoundingClientRect();
+    let x = (ev.clientX - rect.left) + 12;
+    let y = (ev.clientY - rect.top) + 12;
 
-    proxCandidates.push({
-      id: f.properties.id,
-      feature: f,
-      bestSub,
-      bestScore,
-      category: cat,
-      patterns: getPatternsForFragment ? getPatternsForFragment(f.properties.id) : []
+    const maxX = rect.width - 340;
+    if (x > maxX) x = Math.max(8, maxX);
+
+    diffTip.style("left", x + "px").style("top", y + "px");
+  }
+
+  const TOOLTIP_MIN_DIVERGENCE = 0.20;
+
+  function showDiffTip(ev, d) {
+    const aId = d.source?.id || "—";
+    const bId = d.target?.id || "—";
+
+    const diffs = (d.topDiffs || []).filter(item => {
+      const delta = (item.delta != null)
+        ? item.delta
+        : (() => {
+            if (item.a == null && item.b == null) return 0;
+            if (item.a == null || item.b == null) return 1;
+
+            if (Array.isArray(item.a) && Array.isArray(item.b)) {
+              return 1 - jaccardSimilarity(item.a, item.b);
+            }
+
+            return Math.abs(item.a - item.b);
+          })();
+
+      return delta >= TOOLTIP_MIN_DIVERGENCE;
     });
-  });
 
-  if (!proxCandidates.length) return;
+    const listHtml = diffs.map(item => {
+      const label = prettyKey(item.key);
+      const a = fmtAny(item.a);
+      const b = fmtAny(item.b);
+      return `<li><span class="k">${label}</span> : <span class="v">${a}</span> vs <span class="v">${b}</span></li>`;
+    }).join("");
 
-  if (minScore === maxScore) minScore = maxScore - 1;
+    diffTip.html(`
+      <div class="dt-title">Diffraction : ${aId} ↔ ${bId}</div>
+      <div class="dt-sub">Pattern ${d.pattern || "—"}</div>
+      <ul class="dt-list">${listHtml || "<li>—</li>"}</ul>
+    `);
+
+    diffTip.style("display", "block");
+    moveDiffTip(ev);
+  }
+
+  function hideDiffTip() {
+    diffTip.style("display", "none");
+  }
 
   /* -----------------------------------------------------------
-   * 4) SVG + CALCUL POSITIONS INITIALES (PÔLAIRES)
+   * 2) SVG + GROUPES
    * ----------------------------------------------------------- */
   const svg = d3.select("#proxemic-view")
     .append("svg")
     .attr("width", W)
     .attr("height", H);
 
-  const world      = svg.append("g");
+  const world = svg.append("g");
   const slicesLayer = world.append("g");
-  const linksLayer  = world.append("g");
-  const nodesLayer  = world.append("g");
+  const trajectoryLayer = world.append("g");
+  const linksLayer = world.append("g");
+  const nodesLayer = world.append("g");
   const labelsLayer = world.append("g");
 
   svg.call(
@@ -1573,529 +5135,391 @@ Object.entries(subScores).forEach(([sub, val]) => {
       .on("zoom", ev => world.attr("transform", ev.transform))
   );
 
-/* -----------------------------------------------------------
- * 5) ARCS DU CAMEMBERT (CORRIGÉ — ANNEAU + ROTATION PARFAITE)
- * ----------------------------------------------------------- */
+  /* -----------------------------------------------------------
+   * 3) DONUT / SECTEURS
+   * ----------------------------------------------------------- */
+  const arc = d3.arc()
+    .innerRadius(0)
+    .outerRadius(R_BASE);
 
-// => correction clé : on dessine un DONUT, pas un disque plein
-const arc = d3.arc()
-  .innerRadius(0)   // idem fragments → parfaitement aligné
-  .outerRadius(R_BASE);          // bord extérieur
+  const sectors = [
+    { key: "PA", label: "Pratiques actives" },
+    { key: "FS", label: "Forces structurantes" },
+    { key: "DH", label: "Dynamiques hybrides" }
+  ];
 
-const sectors = [
-  { key:"PA", label:"Pratiques actives" },
-  { key:"FS", label:"Forces structurantes" },
-  { key:"DH", label:"Dynamiques hybrides" }
-];
+  slicesLayer.selectAll("path.sector")
+    .data(sectors)
+    .join("path")
+    .attr("class", "sector")
+    .attr("d", d => arc({
+      startAngle: SECTORS[d.key].start + Math.PI / 2,
+      endAngle: SECTORS[d.key].end + Math.PI / 2
+    }))
+    .attr("transform", `translate(${CX},${CY})`)
+    .style("fill", "none")
+    .style("stroke", "rgba(255,255,255,0.45)")
+    .style("stroke-width", 2);
 
-// 1) Secteurs = anneaux
-slicesLayer.selectAll("path.sector")
-  .data(sectors)
-  .join("path")
-  .attr("class","sector")
-  .attr("d",d=>arc({
-    startAngle: SECTORS[d.key].start + Math.PI/2,   // 🔥 correction
-    endAngle:   SECTORS[d.key].end   + Math.PI/2    // 🔥 correction
-  }))
-  .attr("transform",`translate(${CX},${CY})`)
-  .style("fill","none")
-  .style("stroke","rgba(255,255,255,0.45)")
-  .style("stroke-width",2);
+  sectors.forEach(s => {
+    const cat = s.key;
+    const list = SUB_ORDER[cat];
+    if (!list) return;
 
+    const slice = (SECTORS[cat].end - SECTORS[cat].start) / list.length;
 
-// 2) Lignes radiales divisant le donut
-sectors.forEach(s => {
-  const cat = s.key;
-  const list = SUB_ORDER[cat];
-  if (!list) return;
+    for (let i = 1; i < list.length; i++) {
+      const ang = SECTORS[cat].start + i * slice;
 
-  const slice = (SECTORS[cat].end - SECTORS[cat].start) / list.length;
-
-  for (let i=1;i<list.length;i++){
-    const ang = SECTORS[cat].start + i*slice;
-
-    slicesLayer.append("line")
-  .attr("x1", CX)
-  .attr("y1", CY)
-  .attr("x2", CX + R_BASE * Math.cos(ang))
-  .attr("y2", CY + R_BASE * Math.sin(ang))
-  .style("stroke", "rgba(255,255,255,0.25)")
-  .style("stroke-width", 1);
-
-  }
-});
-
+      slicesLayer.append("line")
+        .attr("x1", CX)
+        .attr("y1", CY)
+        .attr("x2", CX + R_BASE * Math.cos(ang))
+        .attr("y2", CY + R_BASE * Math.sin(ang))
+        .style("stroke", "rgba(255,255,255,0.25)")
+        .style("stroke-width", 1);
+    }
+  });
 
   /* -----------------------------------------------------------
-   * 6) LABELS EXTÉRIEURS
+   * 4) LABELS
    * ----------------------------------------------------------- */
   const R_LABEL = R_BASE * 1.12;
+  const R_LABEL_MAIN = R_BASE * 1.32;
 
-// grands pôles — orientés comme les rayons + éloignés + plus grands
-const R_LABEL_MAIN = R_BASE * 1.32; // plus loin que les sub labels
+  sectors.forEach(s => {
+    const ang = (SECTORS[s.key].start + SECTORS[s.key].end) / 2;
 
-sectors.forEach(s => {
-  const ang = (SECTORS[s.key].start + SECTORS[s.key].end) / 2;
+    const x = CX + R_LABEL_MAIN * Math.cos(ang);
+    const y = CY + R_LABEL_MAIN * Math.sin(ang);
 
-  const x = CX + R_LABEL_MAIN * Math.cos(ang);
-  const y = CY + R_LABEL_MAIN * Math.sin(ang);
+    let deg = (ang * 180 / Math.PI) + 90;
+    if (deg > 90 && deg < 270) deg += 180;
 
-  let deg = (ang * 180 / Math.PI) + 90;
-if (deg > 90 && deg < 270) deg += 180;
+    labelsLayer.append("text")
+      .attr("x", x)
+      .attr("y", y)
+      .attr("transform", `rotate(${deg}, ${x}, ${y})`)
+      .text(s.label)
+      .style("fill", "#fff")
+      .style("font-size", "22px")
+      .style("font-weight", "900")
+      .style("text-anchor", "middle")
+      .style("pointer-events", "none");
+  });
 
-
-  labelsLayer.append("text")
-    .attr("x", x)
-    .attr("y", y)
-    .attr("transform", `rotate(${deg}, ${x}, ${y})`)
-    .text(s.label)
-    .style("fill", "#fff")
-    .style("font-size", "22px")     // plus grand
-    .style("font-weight", "900")    // plus gras
-    .style("text-anchor", "middle")
-    .style("pointer-events", "none");
-});
-
-
-  // sous-pôles
-  Object.entries(SUB_ORDER).forEach(([cat, subs])=>{
-    subs.forEach(sub=>{
+  Object.entries(SUB_ORDER).forEach(([cat, subs]) => {
+    subs.forEach(sub => {
       const ang = angleForSub(cat, sub);
-      const x = CX + R_LABEL*Math.cos(ang);
-      const y = CY + R_LABEL*Math.sin(ang);
+      const x = CX + R_LABEL * Math.cos(ang);
+      const y = CY + R_LABEL * Math.sin(ang);
 
-let deg = (ang * 180 / Math.PI) + 90;
-if (deg > 90 && deg < 270) deg += 180;
+      let deg = (ang * 180 / Math.PI) + 90;
+      if (deg > 90 && deg < 270) deg += 180;
 
-
-labelsLayer.append("text")
-  .attr("x", x)
-  .attr("y", y)
-  .attr("transform", `rotate(${deg}, ${x}, ${y})`)
-  .text(SUB_LABELS[sub] || sub)
-  .style("fill","#fff")
-  .style("font-size","11px")
-  .style("font-weight","600")
-  .style("text-anchor","middle")
-  .style("pointer-events","none");
+      labelsLayer.append("text")
+        .attr("x", x)
+        .attr("y", y)
+        .attr("transform", `rotate(${deg}, ${x}, ${y})`)
+        .text(SUB_LABELS[sub] || sub)
+        .style("fill", "#fff")
+        .style("font-size", "11px")
+        .style("font-weight", "600")
+        .style("text-anchor", "middle")
+        .style("pointer-events", "none");
     });
   });
 
   /* -----------------------------------------------------------
-   * 7) POSITIONS INITIALES DES FRAGMENTS
+   * 5) BASE UNIQUE = TRAJECTOIRES (FORCÉ)
    * ----------------------------------------------------------- */
-  const proxData = proxCandidates.map(c=>{
-    const n = (c.bestScore - minScore) / (maxScore - minScore || 1);
-    const radius = R_INNER + n*(R_OUTER - R_INNER);
-    const theta  = angleForSub(c.category, c.bestSub);
+  const proxData = proxDataBase.map(d => ({
+    ...d,
+    patterns: getPatternsForFragment ? getPatternsForFragment(d.id) : []
+  }));
 
-    const x = CX + radius*Math.cos(theta);
-    const y = CY + radius*Math.sin(theta);
+  const ghostData = proxData.filter(d => d.hasGhost);
 
-    return {
-      ...c,
-      x, y, r:radius, theta
-    };
-  });
+  // trajectoires grises
+  trajectoryLayer.selectAll("line.fragment-trajectory")
+    .data(ghostData)
+    .join("line")
+    .attr("class", "fragment-trajectory")
+    .attr("x1", d => d.ghostX)
+    .attr("y1", d => d.ghostY)
+    .attr("x2", d => d.x)
+    .attr("y2", d => d.y)
+    .style("stroke", "#8e8e8e")
+    .style("stroke-width", 1.2)
+    .style("stroke-dasharray", "4 4")
+    .style("opacity", 0.45)
+    .style("pointer-events", "none");
+
+  trajectoryLayer.selectAll("circle.fragment-ghost")
+    .data(ghostData)
+    .join("circle")
+    .attr("class", "fragment-ghost")
+    .attr("cx", d => d.ghostX)
+    .attr("cy", d => d.ghostY)
+    .attr("r", 7)
+    .style("fill", "none")
+    .style("stroke", "#8e8e8e")
+    .style("stroke-width", 1.2)
+    .style("stroke-opacity", 0.45)
+    .style("pointer-events", "none");
 
   /* -----------------------------------------------------------
-   * 8) ANTI-COLLISION (force layout)
+   * 6) LIENS ENTRE FRAGMENTS
    * ----------------------------------------------------------- */
-  const sim = d3.forceSimulation(proxData)
-    .force("x", d3.forceX(d=>d.x).strength(1))
-    .force("y", d3.forceY(d=>d.y).strength(1))
-    .force("collide", d3.forceCollide(15))
-    .stop();
+  const linksData = [];
 
-  for (let i=0;i<200;i++) sim.tick();
+  for (let i = 0; i < proxData.length; i++) {
+    for (let j = i + 1; j < proxData.length; j++) {
+      const A = proxData[i];
+      const B = proxData[j];
+      const common = (A.patterns || []).filter(p => (B.patterns || []).includes(p));
+      if (!common.length) continue;
 
-  proxData.forEach(d=>{
-    d.x = d.x + (d.vx||0);
-    d.y = d.y + (d.vy||0);
-  });
-
-  /* -----------------------------------------------------------
-   * 9) LIENS DE PATTERNS
-   * ----------------------------------------------------------- */
-  const meshLinks = [];
-  for (let i=0;i<proxData.length;i++){
-    for (let j=i+1;j<proxData.length;j++){
-      const A = proxData[i], B = proxData[j];
-      const common = A.patterns.filter(p=>B.patterns.includes(p));
-      if (common.length){
-        meshLinks.push({
-          source:A, target:B,
-          color: colorForPattern ? colorForPattern(common[0]) : "#888"
-        });
-      }
+      linksData.push({
+        source: A,
+        target: B,
+        color: colorForPattern ? colorForPattern(common[0]) : "#888",
+        dashed: false,
+        opacity: 0.25
+      });
     }
   }
 
-  linksLayer.selectAll("line.link")
-    .data(meshLinks)
+  if (SHOW_DIFFRACTIONS) {
+    const all = [...(dataGeojson || []), ...(datamGeojson || [])];
+    const byId = new Map(all.map(f => [String(f.properties.id).trim().toUpperCase(), f]));
+    const byIdNode = new Map(proxData.map(n => [n.id, n]));
+
+    const diffEdges = computeInternalDiffractionEdges(patterns, byId, { topK: 1 });
+
+    diffEdges.forEach(e => {
+      const A = byIdNode.get(e.a);
+      const B = byIdNode.get(e.b);
+      if (!A || !B) return;
+
+      const vecA = featureToVector(A.feature);
+      const vecB = featureToVector(B.feature);
+
+      const topDiffs = topVectorDifferences(vecA, vecB, { topN: 3 });
+
+      linksData.push({
+        source: A,
+        target: B,
+        color: colorForPattern ? colorForPattern(e.pattern) : "#fff",
+        dashed: true,
+        opacity: 0.45,
+        pattern: e.pattern,
+        opposition: e.opposition,
+        comparability: e.comparability,
+        common: e.common,
+        mismatch: e.mismatch,
+        topDiffs
+      });
+    });
+  }
+
+  const HIT_WIDTH_DASHED = 14;
+  const HIT_WIDTH_NORMAL = 0;
+
+  const hitSel = linksLayer.selectAll("line.link-hit")
+    .data(linksData)
     .join("line")
-    .attr("class","link")
-    .attr("x1",d=>d.source.x)
-    .attr("y1",d=>d.source.y)
-    .attr("x2",d=>d.target.x)
-    .attr("y2",d=>d.target.y)
-    .style("stroke",d=>d.color)
-    .style("stroke-width",2)
-    .style("opacity",0.25);
+    .attr("class", "link-hit")
+    .attr("x1", d => d.source.x)
+    .attr("y1", d => d.source.y)
+    .attr("x2", d => d.target.x)
+    .attr("y2", d => d.target.y)
+    .style("stroke", "transparent")
+    .style("stroke-width", d => d.dashed ? HIT_WIDTH_DASHED : HIT_WIDTH_NORMAL)
+    .style("pointer-events", d => d.dashed ? "stroke" : "none");
+
+  linksLayer.selectAll("line.link")
+    .data(linksData)
+    .join("line")
+    .attr("class", "link")
+    .attr("x1", d => d.source.x)
+    .attr("y1", d => d.source.y)
+    .attr("x2", d => d.target.x)
+    .attr("y2", d => d.target.y)
+    .style("stroke", d => d.color)
+    .style("stroke-width", d => d.dashed ? 2.5 : 2)
+    .style("opacity", d => (d.opacity != null ? d.opacity : 0.25))
+    .style("stroke-dasharray", d => d.dashed ? "6 6" : null)
+    .style("pointer-events", "none");
+
+  hitSel
+    .on("mouseenter", (ev, d) => {
+      if (!SHOW_DIFFRACTIONS || !d.dashed) return;
+      showDiffTip(ev, d);
+    })
+    .on("mousemove", (ev, d) => {
+      if (!SHOW_DIFFRACTIONS || !d.dashed) return;
+      moveDiffTip(ev);
+    })
+    .on("mouseleave", (ev, d) => {
+      if (!d.dashed) return;
+      hideDiffTip();
+    });
 
   /* -----------------------------------------------------------
-   * 10) NŒUDS (FRAGMENTS)
+   * 7) NŒUDS = BASE TRAJECTOIRE + ANNEAUX DE PATTERNS
    * ----------------------------------------------------------- */
   const nodes = nodesLayer.selectAll("g.node")
     .data(proxData)
     .join("g")
-    .attr("class","node")
-    .attr("transform", d=>"translate("+d.x+","+d.y+")");
+    .attr("class", "node")
+    .attr("transform", d => `translate(${d.x},${d.y})`);
 
-// patterns rings (réduits à ~70%)
-nodes.each(function(d){
-  if (!d.patterns) return;
-  d.patterns.slice()
-    .sort((a,b)=>parseInt(a.slice(1))-parseInt(b.slice(1)))
-    .forEach((p,i)=>{
-      d3.select(this).append("circle")
-        .attr("r", 11 + i*3) // 16→11, 4→3
-        .style("fill","none")
-        .style("stroke", colorForPattern ? colorForPattern(p) : "#999")
-        .style("stroke-width",2)
-        .style("pointer-events","none");
-    });
-});
+  // anneaux colorés de patterns
+  nodes.each(function(d) {
+    if (!d.patterns) return;
 
-
-// cercle central (réduit à ~70%)
-nodes.append("circle")
-  .attr("r",8) // 12 → 8
-  .style("fill","#fff")
-  .style("stroke","#222")
-  .style("cursor","pointer")
-  .on("click",(ev,d)=>{
-    ev.stopPropagation();
-    openFragmentWithPatternsTabs(d.feature.properties);
+    d.patterns.slice()
+      .sort((a, b) => parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10))
+      .forEach((p, i) => {
+        d3.select(this).append("circle")
+          .attr("r", 11 + i * 3)
+          .style("fill", "none")
+          .style("stroke", colorForPattern ? colorForPattern(p) : "#999")
+          .style("stroke-width", 2)
+          .style("pointer-events", "none");
+      });
   });
 
+  // bulle centrale blanche
+  nodes.append("circle")
+    .attr("r", 8)
+    .style("fill", d => getPatternNodeBaseStyle(d).fill)
+    .style("fill-opacity", d => getPatternNodeBaseStyle(d).fillOpacity)
+    .style("stroke", d => getPatternNodeBaseStyle(d).stroke)
+    .style("stroke-opacity", d => getPatternNodeBaseStyle(d).strokeOpacity)
+    .style("stroke-width", 1.2)
+    .style("cursor", "pointer");
 
-// label id (réduit à ~70%)
-nodes.append("text")
-  .text(d=>d.id)
-  .attr("dy","0.35em")
-  .style("text-anchor","middle")
-  .style("font-size","7px") // 11px → 8px
-  .style("font-weight","bold")
-  .style("pointer-events","none");
-
+  nodes.append("text")
+    .text(d => d.id)
+    .attr("dy", "0.35em")
+    .style("text-anchor", "middle")
+    .style("font-size", "7px")
+    .style("font-weight", "bold")
+    .style("pointer-events", "none");
 
   /* -----------------------------------------------------------
-   * 11) INTERACTIONS : HOVER / CLICK
+   * 8) INTERACTIONS
    * ----------------------------------------------------------- */
   let selected = null;
 
-  function highlight(id){
+  function highlight(id) {
     linksLayer.selectAll("line.link")
-      .style("opacity",d => (d.source.id===id || d.target.id===id)?0.9:0.05);
+      .style("opacity", d => (d.source.id === id || d.target.id === id) ? 0.9 : 0.05);
+
+    trajectoryLayer.selectAll("line.fragment-trajectory, circle.fragment-ghost")
+      .style("opacity", d => d.id === id ? 1 : 0.10);
 
     const connected = new Set([id]);
-    meshLinks.forEach(L=>{
-      if (L.source.id===id) connected.add(L.target.id);
-      if (L.target.id===id) connected.add(L.source.id);
+    linksData.forEach(L => {
+      if (L.source.id === id) connected.add(L.target.id);
+      if (L.target.id === id) connected.add(L.source.id);
     });
 
-    nodes.style("opacity",n => connected.has(n.id)?1:0.1);
+    nodes.style("opacity", n => connected.has(n.id) ? 1 : 0.10);
   }
 
-  function reset(){
+  function reset() {
     if (selected) return;
-    nodes.style("opacity",1);
+
+    nodes.style("opacity", 1);
+
     linksLayer.selectAll("line.link")
-      .style("opacity",0.25);
+      .style("opacity", 0.25);
+
+    trajectoryLayer.selectAll("line.fragment-trajectory")
+      .style("opacity", 0.45);
+
+    trajectoryLayer.selectAll("circle.fragment-ghost")
+      .style("opacity", 1);
   }
 
   nodes
-    .on("mouseenter",function(ev,d){
+    .on("mouseenter", function(ev, d) {
       if (selected) return;
       highlight(d.id);
     })
-    .on("mouseleave",function(){
+    .on("mouseleave", function() {
       if (selected) return;
       reset();
     })
-    .on("click",function(ev,d){
+    .on("click", function(ev, d) {
       ev.stopPropagation();
-      if (selected===d.id){
-        selected=null;
+
+      if (selected === d.id) {
+        selected = null;
         reset();
       } else {
-        selected=d.id;
+        selected = d.id;
         highlight(d.id);
       }
-      openFragmentWithPatternsTabs(d.feature.properties);
+
+      if (d.trajectoryPair) {
+        openTrajectoryFragmentTabs(d.trajectoryPair);
+      } else {
+        openFragmentWithPatternsTabs(d.feature.properties);
+      }
     });
 
-  svg.on("click",()=>{
-    selected=null;
+  svg.on("click", () => {
+    selected = null;
     reset();
   });
 }
 
+function choosePatternKeyFromList(list, messagePrefix = 'Ce fragment appartient à plusieurs patterns :') {
+  if (!list || list.length === 0) return null;
+  if (list.length === 1) return list[0];
 
-
-
-
-
-/*==================================================
-=               GESTION DES VUES (UI)              =
-==================================================*/
-function setView(viewId) {
-  currentView = viewId;
-  const views = {
-    map: document.getElementById('map'),
-    proxemic: document.getElementById('proxemic-view'),
-    gallery: document.getElementById('gallery-view'),
-    critical: document.getElementById('critical-view'),
-  };
-  Object.entries(views).forEach(([key, el]) => { el.style.display = key === viewId ? 'block' : 'none'; });
-  if (viewId === 'proxemic') showProxemicView();
-  if (viewId === 'gallery')  showGalleryView();
-  if (viewId === 'critical') showCriticalView();
-  updateInterfaceElements(viewId);
-}
-
-function updateInterfaceElements(viewId) {
-  const legendBtn   = document.getElementById('toggle-legend-btn');
-  const locationBtn = document.getElementById('toggle-location-btn');
-
-  document.querySelectorAll('.crit-key').forEach(cb => {
-  cb.addEventListener('change', () => {
-    const key = cb.dataset.key;
-    if (!key) return;
-
-    if (cb.checked) ACTIVE_FUZZY_KEYS.add(key);
-    else ACTIVE_FUZZY_KEYS.delete(key);
-
-    // Recompute ↓↓↓
-    applyFilters();
-  });
-});
-
-
-  // ✅ bouton "Critères actifs" visible sur : Carte (patterns-map), Proxémie, Galerie
-  const wantsLegend =
-    viewId === 'proxemic' ||
-    viewId === 'gallery'  ||
-    viewId === 'patterns-map';
-
-  legendBtn.style.display   = wantsLegend ? 'block' : 'none';
-  locationBtn.style.display = (viewId === 'map' || viewId === 'patterns-map' || viewId === 'unit') ? 'block' : 'none';
+  const msg = messagePrefix + '\n' + list.map((p,i)=>`${i+1}) ${p}`).join('\n') + '\nTape le numéro :';
+  const ans = window.prompt(msg, '1');
+  const idx = parseInt(ans, 10);
+  if (!Number.isFinite(idx) || idx < 1 || idx > list.length) return null;
+  return list[idx - 1];
 }
 
 
-const topTabs = document.querySelectorAll('.top-tab');
-const subnav = document.getElementById('subnav-patterns');
-const subTabs = document.querySelectorAll('.sub-tab');
-
-const VIEWS = {
-  fragments: 'map',
-  unit: 'unit-view',
-  sub: {
-    'patterns-map': 'patterns-map',
-    'proxemic': 'proxemic-view',
-    'gallery': 'gallery-view',
-  }
-};
-
-function showView(viewId) {
-  document.querySelectorAll('.view').forEach(v => { if (!v) return; v.style.display = (v.id === viewId) ? 'block' : 'none'; });
-  if (viewId === 'map' && map?.invalidateSize) setTimeout(() => map.invalidateSize(), 0);
-  if (viewId === 'unit-view' && unitMap?.invalidateSize) setTimeout(() => unitMap.invalidateSize(), 0);
-}
-
-function setTopTab(name) {
-  topTabs.forEach(btn => btn.classList.toggle('active', btn.dataset.top === name));
-  if (name === 'patterns') {
-    subnav.classList.remove('subnav--inactive');
-    const currentActiveSub = document.querySelector('.sub-tab.active')?.dataset.sub || 'proxemic';
-    setSubTab(currentActiveSub);
-  } else {
-    subnav.classList.add('subnav--inactive');
-    subTabs.forEach(btn => btn.classList.remove('active'));
-    if (name === 'fragments') { currentView = 'map'; showView(VIEWS.fragments); }
-    if (name === 'unit')      { currentView = 'unit'; showView(VIEWS.unit); ensureUnitMap(); renderAllUnits(); }
-    updateInterfaceElements(currentView);
-  }
-  if (unitCreation.active && name !== 'patterns') stopUnitCreation();
-
-  const similarityControls = document.getElementById('similarity-controls');
-  similarityControls.style.display = (name === 'patterns') ? 'block' : 'none';
-}
-
-function setSubTab(subName) {
-  if (unitCreation.active && subName !== 'patterns-map') stopUnitCreation();
-  if (subName === 'proxemic') currentView = 'proxemic';
-  else if (subName === 'gallery') currentView = 'gallery';
-  else if (subName === 'patterns-map') currentView = 'patterns-map';
-
-  subTabs.forEach(btn => btn.classList.toggle('active', btn.dataset.sub === subName));
-  const viewId = VIEWS.sub[subName]; showView(viewId);
-
-  if (subName === 'patterns-map') {
-    initPatternMapOnce();
-    setTimeout(() => patternMap.invalidateSize(), 0);
-    renderPatternBaseGrey();
-    refreshPatternsMap();
-  }
-  if (subName === 'proxemic') showProxemicView();
-  else if (subName === 'gallery') showGalleryView();
-
-  updateInterfaceElements(currentView);
-}
-
-function maybeHideTabbedOnViewChange() {
-  if (currentView !== 'patterns-map' && Tabbed?.el) {
-    Tabbed.openTabs?.forEach((_rec, id) => closeTab(id));
-    Tabbed.el.style.display = 'none';
-  }
-}
-
-// Listeners onglets
-topTabs.forEach(btn => btn.addEventListener('click', () => setTopTab(btn.dataset.top)));
-subTabs.forEach(btn => btn.addEventListener('click', () => setSubTab(btn.dataset.sub)));
-
-// État initial
-setTopTab('fragments');
-currentView = 'map';
-updateInterfaceElements('map');
-
-
-/*==================================================
-=                  ABOUT (Info)                    =
-==================================================*/
-document.addEventListener('DOMContentLoaded', () => {
-  const infoBtn = document.getElementById('info-btn');
-  const aboutBox = document.getElementById('about');
-  function toggleAbout() {
-    const isOpen = aboutBox.style.display === 'block';
-    aboutBox.style.display = isOpen ? 'none' : 'block';
-    if (infoBtn) infoBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
-  }
-  if (infoBtn) infoBtn.addEventListener('click', toggleAbout);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && aboutBox.style.display === 'block') toggleAbout(); });
-});
-
-document.addEventListener('DOMContentLoaded', () => {
-  /* -------------------------
-     RESET CHECKBOXES → cochées
-  ------------------------- */
-
-  // Zones (Montreuil / Mirail)
-  document.querySelectorAll('.filter-zone').forEach(cb => {
-    cb.checked = true;
-  });
-
-  // Critères fuzzy
-  document.querySelectorAll('.crit-key').forEach(cb => {
-    cb.checked = true;
-  });
-
-  // Reset état interne fuzzy
-  ACTIVE_FUZZY_KEYS = new Set(ALL_FUZZY_KEYS);
-
-  // Recalcul général
-  applyFilters();
-  recomputePatternsAndRefreshViews();
-});
-
-
-/***************************************************
-=          SLIDER SEUIL DE SIMILARITÉ (FUZZY)      =
-***************************************************/
-
-function debounce(fn, delay = 160) {
-  let t;
-  return function (...args) {
-    clearTimeout(t);
-    t = setTimeout(() => fn.apply(this, args), delay);
-  };
-}
-
-const sliderEl = document.getElementById('similarity-slider');
-const sliderValueEl = document.getElementById('slider-value');
-
-if (sliderEl && sliderValueEl) {
-  // Valeur initiale (75 → 0.75 par défaut)
-  const initial = parseInt(sliderEl.value, 10) / 100;
-  SIM_THRESHOLD = initial;
-  sliderValueEl.textContent = initial.toFixed(2);
-
-  sliderEl.addEventListener('input', debounce(e => {
-    const v = parseInt(e.target.value, 10);    // ex : 50–95
-    SIM_THRESHOLD = v / 100;                   // 0.50–0.95
-    sliderValueEl.textContent = SIM_THRESHOLD.toFixed(2);
-
-    const visible = [
-      ...(dataGeojson || []),
-      ...(datamGeojson || [])
-    ]
-      .filter(f => isFeatureInActiveZones ? isFeatureInActiveZones(f) : true)
-      .filter(f => !f.properties?.isDiscourse);
-
-    recomputePatternsAndRefreshViews();
-
-    if (currentView === 'gallery')       showGalleryView();
-    else if (currentView === 'proxemic') {
-    const svg = d3.select("#proxemic-view svg");
-    const world = svg.select("g"); 
-    const oldTransform = world.attr("transform"); 
-
-    showProxemicView();
-
-    // Réappliquer la transformation précédente
-    const newSvg = d3.select("#proxemic-view svg");
-    const newWorld = newSvg.select("g");
-    if (oldTransform) newWorld.attr("transform", oldTransform);
-}
-
-    else if (currentView === 'patterns-map') {
-      renderPatternBaseGrey();
-      refreshPatternsMap();
-    }
-  }, 160));
-}
-
-
-
+/* ==================================================
+   9) CARTES PATTERNS ET UNITÉS
+================================================== */
 /*==================================================
 =        CARTE PATTERNS : INIT + COULEURS          =
 ==================================================*/
-let patternMap = null;
-let patternBaseLayer = null;        // fragments gris
-let patternOverlayGroup = null;     // anneaux colorés
-let patternPanes = new Map();       // pane par anneau
-
-const SAT_SEQ = [95, 85, 90, 80];
-const LIT_SEQ = [58, 70, 50, 64];
-const PATTERN_COLORS = Object.fromEntries(
-  Array.from({ length: 100 }, (_, i) => {
-    const hue = Math.round((i * 137.508) % 360);
-    const sat = SAT_SEQ[i % SAT_SEQ.length];
-    const lit = LIT_SEQ[(Math.floor(i / 4)) % LIT_SEQ.length];
-    return [`P${i + 1}`, `hsl(${hue}, ${sat}%, ${lit}%)`];
-  })
-);
 
 function colorForPattern(pName) {
-  if (PATTERN_COLORS[pName]) return PATTERN_COLORS[pName];
-  const n = parseInt(String(pName).replace(/^P/i, ''), 10);
-  if (Number.isFinite(n)) {
-    const idx = ((n - 1) % 100) + 1;
-    return PATTERN_COLORS[`P${idx}`];
+  const key = String(pName || '').trim().toUpperCase();
+
+  // 1) Couleur explicitement déclarée (prioritaire)
+  if (PATTERN_COLORS[key]) return PATTERN_COLORS[key];
+
+  // 2) Support P12 / D12 (numérique stable)
+  const m = key.match(/^([PD])(\d+)$/);
+  if (m) {
+    const prefix = m[1];              // 'P' ou 'D'
+    const n = parseInt(m[2], 10);     // numéro
+    if (Number.isFinite(n)) {
+      // Option A (recommandée) : décaler D pour ne pas réutiliser exactement les mêmes couleurs que P
+      const offset = (prefix === 'D') ? 50 : 0;  // ajuste 50 si tu veux plus/moins d’écart
+      const idx = (((n - 1 + offset) % 100) + 1);
+      const pKey = `P${idx}`; // on réutilise le nuancier P existant
+      return PATTERN_COLORS[pKey] || `hsl(${(idx * 37) % 360}, 90%, 55%)`;
+    }
   }
+
+  // 3) Fallback hash (stable)
   let h = 0;
-  for (const c of String(pName)) h = (h * 31 + c.charCodeAt(0)) % 360;
+  for (const c of key) h = (h * 31 + c.charCodeAt(0)) % 360;
   return `hsl(${h}, 90%, 55%)`;
 }
 window.colorForPattern = colorForPattern;
@@ -2119,15 +5543,56 @@ function isFeatureInActiveZones(f) {
   return zones.includes(zone);
 }
 
+function featureHasAnyActiveCriterion(feature) {
+  if (!feature?.properties) return false;
+
+  // fuzzy
+  for (const k of ALL_FUZZY_KEYS) {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) continue;
+    if (parseFuzzy(feature.properties[k]) !== null) return true;
+  }
+
+  // texte
+  for (const k of TEXT_KEYS) {
+    if (!ACTIVE_CRITERIA_KEYS.has(k)) continue;
+    if ((parseMultiText(feature.properties[k]) || []).length) return true;
+  }
+
+  return false;
+}
+
+function getVisibleSpatialFeaturesForPatterns() {
+  const allSpatial = [
+    ...(dataGeojson || []),
+    ...(datamGeojson || []),
+    ...(batimentsMontreuilGeojson || []),
+    ...(batimentsToulouseGeojson || [])
+  ].filter(f => {
+    const props = f?.properties || {};
+    if (props.isDiscourse) return false;
+    if (!isFeatureInActiveZones(f)) return false;
+    return true;
+  });
+
+  const visibleFragments = allSpatial.filter(f => {
+    const props = f.properties || {};
+    return !props.isBuilding && featureHasAnyActiveCriterion(f);
+  });
+
+  const visibleBuildings = allSpatial.filter(f => {
+    const props = f.properties || {};
+    return !!props.isBuilding;
+  });
+
+  return { visibleFragments, visibleBuildings };
+}
+
 /* Patterns auxquels appartient un fragment */
 function getPatternsForFragment(fragmentId) {
-  const result = [];
-  Object.entries(patterns || {}).forEach(([pName, pData]) => {
-    if ((pData.elements || []).includes(fragmentId)) result.push(pName);
-  });
-  result.sort((a, b) => parseInt(a.replace('P', ''), 10) - parseInt(b.replace('P', ''), 10));
-  return result;
+  const id = String(fragmentId || '').trim();
+  return fragmentToPatternIds.get(id) || [];
 }
+
 
 /* Init carte patterns */
 function initPatternMapOnce() {
@@ -2141,6 +5606,8 @@ function initPatternMapOnce() {
 
   patternBaseLayer = L.layerGroup().addTo(patternMap);
   patternOverlayGroup = L.layerGroup().addTo(patternMap);
+  patternBuildingsLayer = L.layerGroup().addTo(patternMap);
+
 
   fetch('data/contour.geojson')
     .then(r => r.json())
@@ -2161,93 +5628,107 @@ function ensureRingPane(ringIndex) {
   return paneId;
 }
 
-/* Centre d'un feature */
-function getFeatureCenter(feature) {
-  if (feature.geometry?.type === 'Point') {
-    const c = feature.geometry.coordinates;
-    return L.latLng(c[1], c[0]);
-  }
-  const tmp = L.geoJSON(feature);
-  try {
-    return tmp.getBounds().getCenter();
-  } catch (e) {
-    const c = (feature.geometry && feature.geometry.coordinates && feature.geometry.coordinates[0]) || [0, 0];
-    return L.latLng(c[1] || 0, c[0] || 0);
-  }
+
+function getPatternTrajectoryBaseFeatures() {
+  const activeZones = getActiveZones ? getActiveZones() : ['montreuil', 'mirail'];
+  const out = [];
+
+  ['montreuil', 'mirail'].forEach(zone => {
+    if (!activeZones.includes(zone)) return;
+
+    const pairs = buildTemporalPairsForZone(zone);
+
+    pairs.forEach(pair => {
+      const feature = pair.t2 || pair.t1;
+      if (!feature) return;
+
+      out.push({
+        ...feature,
+        properties: {
+          ...(feature.properties || {}),
+          zone,
+          __trajectoryStatus: pair.status,
+          __trajectoryPair: pair
+        }
+      });
+    });
+  });
+
+  return out;
 }
+
+
+
 
 /* Fond gris : fragments visibles */
 function renderPatternBaseGrey() {
   if (!patternMap) return;
   patternBaseLayer.clearLayers();
+  if (patternBuildingsLayer) patternBuildingsLayer.clearLayers();
 
-  const baseStyle = {
-    color: '#777',
-    weight: 1,
-    opacity: 1,
-    fillColor: '#777',
-    fillOpacity: 0.25
-  };
 
-  const filterActiveZones = feat => isFeatureInActiveZones(feat) && !feat.properties.isDiscourse;
+  const baseFeatures = getPatternTrajectoryBaseFeatures();
 
-  if (dataGeojson?.length) {
-    L.geoJSON(
-      { type: 'FeatureCollection', features: dataGeojson },
-      {
-        filter: filterActiveZones,
-        pointToLayer: (f, latlng) => L.circleMarker(latlng, { ...baseStyle, radius: 4 }),
-        style: () => baseStyle,
-        onEachFeature: (feature, layer) => {
-          layer.on('click', () => onPatternsMapFragmentClick(feature));
-        }
+  L.geoJSON(
+    { type: 'FeatureCollection', features: baseFeatures },
+    {
+      filter: feat => isFeatureInActiveZones(feat) && !feat.properties?.isDiscourse,
+      pointToLayer: (feature, latlng) => {
+        const styleObj = getGreyTrajectoryStyle(feature.properties?.__trajectoryStatus);
+        return L.circleMarker(latlng, {
+          radius: styleObj.radius,
+          color: styleObj.color,
+          weight: styleObj.weight,
+          opacity: styleObj.opacity,
+          fillColor: styleObj.fillColor,
+          fillOpacity: styleObj.fillOpacity
+        });
+      },
+      style: feature => {
+        const styleObj = getGreyTrajectoryStyle(feature.properties?.__trajectoryStatus);
+        return {
+          color: styleObj.color,
+          weight: styleObj.weight,
+          opacity: styleObj.opacity,
+          fillColor: styleObj.fillColor,
+          fillOpacity: styleObj.fillOpacity
+        };
+      },
+      onEachFeature: (feature, layer) => {
+        const pair = feature.properties?.__trajectoryPair || null;
+
+        layer.on('click', () => {
+          if (pair) openTrajectoryFragmentTabs(pair);
+          else onPatternsMapFragmentClick(feature);
+        });
       }
-    ).addTo(patternBaseLayer);
+    }
+  ).addTo(patternBaseLayer);
+
+ const bStyle = {
+  stroke: false,        
+  fill: true,
+  fillColor: '#b5b5b5', 
+  fillOpacity: 0.20     
+};
+
+
+  const buildingsVisible = [
+    ...(batimentsMontreuilGeojson || []),
+    ...(batimentsToulouseGeojson  || [])
+  ].filter(f => isFeatureInActiveZones(f));
+
+  if (patternBuildingsLayer && buildingsVisible.length) {
+    L.geoJSON(
+      { type:'FeatureCollection', features: buildingsVisible },
+      {
+        style: () => bStyle,
+        interactive: false
+      }
+    ).addTo(patternBuildingsLayer);
   }
 
-  if (datamGeojson?.length) {
-    L.geoJSON(
-      { type: 'FeatureCollection', features: datamGeojson },
-      {
-        filter: filterActiveZones,
-        pointToLayer: (f, latlng) => L.circleMarker(latlng, { ...baseStyle, radius: 4 }),
-        style: () => baseStyle,
-        onEachFeature: (feature, layer) => {
-          layer.on('click', () => onPatternsMapFragmentClick(feature));
-        }
-      }
-    ).addTo(patternBaseLayer);
-  }
-}
 
-/* Similarité moyenne d'un fragment à tous les membres d'un pattern (fuzzy) */
-function computeFragmentPatternSimilarity(fragmentId, patternName, byId) {
-  const pData = patterns[patternName];
-  if (!pData) return 0;
-
-  const ids = pData.elements || [];
-  if (ids.length <= 1) return 1;
-
-  const frag = byId.get(fragmentId);
-  if (!frag) return 0;
-
-  const vecF = featureToVector(frag);
-
-  let sum = 0;
-  let count = 0;
-
-  ids.forEach(id => {
-    if (id === fragmentId) return;
-    const other = byId.get(id);
-    if (!other) return;
-    const vecO = featureToVector(other);
-    const sim = similarityFuzzy(vecF, vecO);
-    sum += sim;
-    count++;
-  });
-
-  if (!count) return 0;
-  return sum / count;
 }
 
 /* Rafraîchit les anneaux colorés (patterns) */
@@ -2255,81 +5736,69 @@ function refreshPatternsMap() {
   if (!patternMap) return;
   patternOverlayGroup.clearLayers();
 
-  // toujours recalculer la liste complète
-  combinedFeatures = [...(dataGeojson || []), ...(datamGeojson || [])];
+  const zones = getActiveZones();
 
-  const byId = new Map(combinedFeatures.map(f => [f.properties.id, f]));
-  const membersByFragment = new Map();
-
-  Object.entries(patterns).forEach(([pName, pData]) => {
-    (pData.elements || []).forEach(id => {
+  function agencementZone(ag) {
+    const allFrags = [...(dataGeojson || []), ...(datamGeojson || [])];
+    const byId = new Map(allFrags.map(f => [f.properties?.id, f]));
+    for (const id of (ag.fragmentIds || [])) {
       const f = byId.get(id);
-      if (!f) return;
-      if (f.properties.isDiscourse) return;
-      if (!isFeatureInActiveZones(f)) return;
+      if (f?.properties?.zone) return f.properties.zone;
+    }
+    return null;
+  }
 
-      if (!membersByFragment.has(id)) membersByFragment.set(id, []);
-      membersByFragment.get(id).push(pName);
-    });
-  });
+  const baseStyle = {
+    color: '#9a9a9a',
+    weight: 1,
+    opacity: 0.25,
+    fill: false
+  };
 
-  const BASE_RADIUS = 5;
-  const RING_SPACING = 3;
-  const RING_WEIGHT = 2;
+  const RING_SPACING_M = 12;   // anneaux espacés de 12m (lisible)
+  const RING_WEIGHT = 3;
 
-  membersByFragment.forEach((pList, id) => {
-    const feature = byId.get(id);
-    if (!feature) return;
+  (agencements || []).forEach(ag => {
+    const z = agencementZone(ag);
+    if (z && !zones.includes(z)) return;
 
-    const centerLatLng = getFeatureCenter(feature);
-    const fragId = feature.properties.id || '';
-    const fragName = feature.properties.name || '';
+    const c = ag.center;
+    if (!c) return;
 
-    // tri des patterns par numéro
-    const rings = pList
-      .slice()
-      .sort((a, b) => parseInt(String(a).replace('P', ''), 10) - parseInt(String(b).replace('P', ''), 10));
+    // 1) périmètre gris
+    L.circle(c, { ...baseStyle, radius: ag.radiusM })
+      .addTo(patternOverlayGroup);
 
-    // préparation du HTML fuzzy pour le tooltip
-    const itemsHtml = rings
-      .map(pName => {
-        const pData = patterns[pName];
-        if (!pData) return '';
-        const size = (pData.elements || []).length;
-        const sim = computeFragmentPatternSimilarity(fragId, pName, byId);
-        return `<li>${pName} — ${size} fragments — sim. moy. avec ce fragment : ${sim.toFixed(2)}</li>`;
-      })
-      .join('');
+    const pList = (ag.patternIds || []).slice();
+    if (!pList.length) return;
 
+    // tri P1,P2...
+    pList.sort((a,b) => parseInt(a.replace('P',''),10) - parseInt(b.replace('P',''),10));
+
+    // tooltip
     const tipHtml = `
-      <div class="pt-title">${fragId}${fragName ? ' — ' + fragName : ''}</div>
-      <div class="pt-sub">Appartient aux patterns :</div>
-      <ul class="pt-list">
-        ${itemsHtml || '<li>Aucun pattern</li>'}
-      </ul>
+      <div class="pt-title"><strong>${ag.id}</strong></div>
+      <div>${ag.fragmentsCount} fragments • ${ag.buildingsCount} bâtiments</div>
+      <div style="margin-top:6px">Patterns : ${pList.join(', ')}</div>
     `;
 
-    // un anneau par pattern
-    rings.forEach((pName, idx) => {
+    // 2) anneaux colorés (autour du périmètre)
+    pList.forEach((pName, idx) => {
       const color = colorForPattern(pName);
-      const radius = BASE_RADIUS + idx * RING_SPACING;
-      const pane = ensureRingPane(idx);
-
-      const marker = L.circleMarker(centerLatLng, {
-        pane,
-        radius,
+      const ring = L.circle(c, {
+        radius: ag.radiusM + idx * RING_SPACING_M,
         color,
         weight: RING_WEIGHT,
-        fillOpacity: 0
+        opacity: 0.95,
+        fill: false
       });
 
-      marker.on('mouseover', function () {
+      ring.on('mouseover', function () {
         if (!this._tooltip) {
           this.bindTooltip(tipHtml, {
             className: 'pattern-tip',
             direction: 'top',
             sticky: true,
-            offset: [0, -6],
             opacity: 1
           }).openTooltip();
         } else {
@@ -2337,73 +5806,139 @@ function refreshPatternsMap() {
         }
       });
 
-      marker.on('mouseout', function () {
-        this.closeTooltip();
-      });
+      ring.on('mouseout', function () { this.closeTooltip(); });
 
-      marker.on('click', () => onPatternsMapFragmentClick(feature));
-
-      marker.addTo(patternOverlayGroup);
+      ring.addTo(patternOverlayGroup);
     });
   });
 }
 
-function onPatternsMapFragmentClick(feature) {
+function onPatternsMapFragmentClick(feature, patternKey) {
   if (unitCreation.active) {
-    handleUnitSelection(feature);
+    handleUnitSelection(feature, patternKey);
     return;
   }
   openFragmentWithPatternsTabs(feature.properties || {});
 }
 
+/* ==================================================
+   9BIS) UNITES DE PROJET
+================================================== */
 
+unitCreation.mode = null; // 'map' | 'proxemic'
 
+function startUnitCreationMap() {
+  unitCreation.mode = 'map';
 
-/*==================================================
-=             MODE CRÉATION D’UNITÉ (UP)           =
-==================================================*/
-function startUnitCreation() {
   setTopTab('patterns');
   setSubTab('patterns-map');
   initPatternMapOnce();
+
   if (unitCreation.active) return;
   unitCreation.active = true;
 
+  // (ton code existant)
   if (patternOverlayGroup && patternMap.hasLayer(patternOverlayGroup)) {
-    patternMap.removeLayer(patternOverlayGroup); unitCreation.ringsVisible = false;
+    patternMap.removeLayer(patternOverlayGroup);
+    unitCreation.ringsVisible = false;
   }
+
   const btn = document.getElementById('create-unit-btn');
   if (btn) { btn.textContent = 'Annuler la création'; btn.classList.add('is-armed'); btn.setAttribute('aria-pressed','true'); }
-  const cont = patternMap.getContainer(); cont.classList.add('patterns-creating');
-  const hint = document.getElementById('unit-hint'); hint.style.display = 'block';
-  unitCreation.mouseMoveHandler = (e) => { hint.style.left = e.clientX + 'px'; hint.style.top = e.clientY + 'px'; };
-  window.addEventListener('mousemove', unitCreation.mouseMoveHandler);
+
+  const cont = patternMap.getContainer();
+  cont.classList.add('patterns-creating');
+
+  const hint = document.getElementById('unit-hint');
+  if (hint) {
+    hint.textContent = 'Clique un fragment sur la carte (Patterns) pour créer une unité';
+    hint.style.display = 'block';
+    unitCreation.mouseMoveHandler = (e) => { hint.style.left = e.clientX + 'px'; hint.style.top = e.clientY + 'px'; };
+    window.addEventListener('mousemove', unitCreation.mouseMoveHandler);
+  }
 }
+
+function startUnitCreationProxemic() {
+  unitCreation.mode = 'proxemic';
+
+  setTopTab('patterns');
+  setSubTab('proxemic'); // on reste en proxémie
+
+  if (unitCreation.active) return;
+  unitCreation.active = true;
+
+  const btn = document.getElementById('create-unit-btn');
+  if (btn) { btn.textContent = 'Annuler la création'; btn.classList.add('is-armed'); btn.setAttribute('aria-pressed','true'); }
+
+  // pas de "patterns-creating" ici (pas de patternMap)
+  const hint = document.getElementById('unit-hint');
+  if (hint) {
+    hint.textContent = 'Clique un fragment dans la proxémie pour choisir un pattern';
+    hint.style.display = 'block';
+    unitCreation.mouseMoveHandler = (e) => { hint.style.left = e.clientX + 'px'; hint.style.top = e.clientY + 'px'; };
+    window.addEventListener('mousemove', unitCreation.mouseMoveHandler);
+  }
+}
+
+
+
 function stopUnitCreation() {
   if (!unitCreation.active) return;
+
   unitCreation.active = false;
-  if (!unitCreation.ringsVisible && patternOverlayGroup) { patternOverlayGroup.addTo(patternMap); unitCreation.ringsVisible = true; }
+
+  if (unitCreation.mode === 'map') {
+    if (!unitCreation.ringsVisible && patternOverlayGroup) {
+      patternOverlayGroup.addTo(patternMap);
+      unitCreation.ringsVisible = true;
+    }
+    const cont = patternMap.getContainer();
+    cont.classList.remove('patterns-creating');
+  }
+
+  unitCreation.mode = null;
+
   const btn = document.getElementById('create-unit-btn');
   if (btn) { btn.textContent = 'Créer une Unité de Projet'; btn.classList.remove('is-armed'); btn.setAttribute('aria-pressed','false'); }
-  const cont = patternMap.getContainer(); cont.classList.remove('patterns-creating');
-  const hint = document.getElementById('unit-hint'); hint.style.display = 'none';
-  if (unitCreation.mouseMoveHandler) { window.removeEventListener('mousemove', unitCreation.mouseMoveHandler); unitCreation.mouseMoveHandler = null; }
+
+  const hint = document.getElementById('unit-hint');
+  if (hint) hint.style.display = 'none';
+
+  if (unitCreation.mouseMoveHandler) {
+    window.removeEventListener('mousemove', unitCreation.mouseMoveHandler);
+    unitCreation.mouseMoveHandler = null;
+  }
 }
+
+
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && unitCreation.active) stopUnitCreation(); });
 
 // Bouton toggle création UP
 const createUnitBtn = document.getElementById('create-unit-btn');
-if (createUnitBtn) createUnitBtn.addEventListener('click', () => { unitCreation.active ? stopUnitCreation() : startUnitCreation(); });
+
+if (createUnitBtn) createUnitBtn.addEventListener('click', () => {
+  if (unitCreation.active) { stopUnitCreation(); return; }
+
+  const sub = document.querySelector('.sub-tab.active')?.dataset.sub || 'proxemic';
+
+  if (sub === 'proxemic') startUnitCreationProxemic();
+  else startUnitCreationMap(); // patterns-map ou autre
+});
 
 // Sélection d’un fragment ⇒ création UP locale
-function handleUnitSelection(feature) {
+function handleUnitSelection(feature, patternKey) {
   stopUnitCreation();
 
-  // ➜ on récupère le code du fragment (ex: "M12…" ou "N07…")
   const srcId = feature?.properties?.id || 'UNK';
-  let unitId = `UP-${srcId}`;
 
-  // (optionnel) si une unité avec le même ID existe déjà, on différencie
+  // déterminer patternKey si pas fourni
+  if (!patternKey) {
+    const list = getPatternsForFragment(srcId);
+    patternKey = choosePatternKeyFromList(list, 'Choisis le pattern à utiliser pour cette unité :');
+    if (!patternKey) return;
+  }
+
+  let unitId = `UP-${srcId}`;
   const exists = loadUnitsLocal().some(u => u.id === unitId);
   if (exists) unitId = `UP-${srcId}-${Date.now().toString().slice(-4)}`;
 
@@ -2411,15 +5946,169 @@ function handleUnitSelection(feature) {
     id: unitId,
     sourceFragmentId: srcId,
     geometry: feature.geometry,
-    // ➜ le "nom" affiché partout = l'ID voulu
+    patternKey,                    // ✅ nouveau
     props: { name: unitId },
     createdAt: new Date().toISOString()
   };
 
   saveUnitLocal(unit);
+
+  // ✅ contexte "pattern isolé" pour l'onglet unité
+  unitContext = { patternKey, sourceFragmentId: srcId };
+
   setTopTab('unit');
   showView('unit-view');
-  setTimeout(() => { renderAllUnits(); zoomToUnit(unit); }, 0);
+
+  // Par défaut, ouvre la carte unité et affiche le pattern
+  setUnitSubTab('map');
+  setTimeout(() => {
+    renderUnitPatternContextOnUnitMap(patternKey, srcId);
+  }, 0);
+}
+
+
+function getCombinedFeatureById(id) {
+  // combinedFeatures est déjà utilisé dans ta carte patterns (si accessible globalement)
+  if (typeof combinedFeatures !== 'undefined' && Array.isArray(combinedFeatures)) {
+    return combinedFeatures.find(f => f?.properties?.id === id);
+  }
+  return null;
+}
+
+function renderUnitPatternContextOnUnitMap(patternKey, sourceId) {
+  const mapU = ensureUnitMap();
+
+  if (!unitPatternGroup) unitPatternGroup = L.layerGroup().addTo(mapU);
+  unitPatternGroup.clearLayers();
+
+  const occIds = patterns?.[patternKey]?.occurrences || [];
+  if (!occIds.length) return;
+
+  let bounds = null;
+
+  occIds.forEach(oid => {
+    const ag = agencementsById.get(oid);
+    if (!ag?.center) return;
+
+    const isSourceInside = (ag.fragmentIds || []).includes(sourceId);
+
+    const mk = L.circleMarker(ag.center, {
+      radius: isSourceInside ? 9 : 7,
+      color: isSourceInside ? '#fff' : '#888',
+      weight: isSourceInside ? 3 : 2,
+      fillColor: isSourceInside ? '#fff' : '#888',
+      fillOpacity: isSourceInside ? 0.22 : 0.12
+    });
+
+    mk.on('click', () => {
+      // ouvre l’agencement panel
+      const allFrags = [...(dataGeojson || []), ...(datamGeojson || [])]
+        .filter(f => !f.properties?.isDiscourse && !f.properties?.isBuilding);
+      const byFragId = new Map(allFrags.map(f => [String(f.properties?.id||'').trim(), f]));
+
+      const allBlds = [...(batimentsMontreuilGeojson || []), ...(batimentsToulouseGeojson || [])];
+      const byBldId = new Map(allBlds.map(b => [String(b.properties?.id||'').trim(), b]));
+
+      openTab({
+        id: `ag-${ag.id}`,
+        title: ag.id,
+        kind: 'agencement',
+        render: (p) => renderAgencementPanel(p, ag, { byFragId, byBldId })
+      });
+    });
+
+    mk.addTo(unitPatternGroup);
+    bounds = bounds ? bounds.extend(ag.center) : L.latLngBounds([ag.center, ag.center]);
+  });
+
+  if (bounds && bounds.isValid()) mapU.fitBounds(bounds.pad(0.25));
+}
+
+
+function renderUnitProxemicPattern(patternKey, sourceId) {
+  const host = document.getElementById('unit-proxemic');
+  if (!host) return;
+
+  host.innerHTML = '';
+
+  const occIds = patterns?.[patternKey]?.occurrences || [];
+  if (!occIds.length) {
+    host.textContent = 'Aucun fragment dans ce pattern.';
+    return;
+  }
+
+  const ids = computeFragmentsUnionFromOccurrences(occIds);
+  if (!ids.length) {
+    host.textContent = 'Aucun fragment dans ce pattern.';
+    return;
+  }
+
+  const w = host.clientWidth || window.innerWidth;
+  const h = host.clientHeight || window.innerHeight;
+
+  const svg = d3.select(host).append('svg')
+    .attr('width', w)
+    .attr('height', h);
+
+  const centerNode = { id: `PATTERN:${patternKey}`, isPattern: true, label: patternKey };
+  const fragNodes = ids.map(fid => {
+    const feat = getCombinedFeatureById(fid);
+    return {
+      id: fid,
+      isPattern: false,
+      isSource: fid === sourceId,
+      feature: feat
+    };
+  }).filter(n => !!n.feature);
+
+  const nodes = [centerNode, ...fragNodes];
+  const links = fragNodes.map(n => ({ source: centerNode.id, target: n.id }));
+
+  const link = svg.append('g')
+    .selectAll('line')
+    .data(links)
+    .enter().append('line')
+    .attr('stroke', '#666')
+    .attr('stroke-width', 1)
+    .attr('stroke-dasharray', '4,4')
+    .attr('opacity', 0.8);
+
+  const node = svg.append('g')
+    .selectAll('circle')
+    .data(nodes)
+    .enter().append('circle')
+    .attr('r', d => d.isPattern ? 22 : (d.isSource ? 10 : 8))
+    .attr('fill', d => d.isPattern ? 'none' : (d.isSource ? '#fff' : '#777'))
+    .attr('stroke', d => d.isPattern ? '#fff' : '#111')
+    .attr('stroke-width', d => d.isPattern ? 2 : 1)
+    .style('cursor', d => d.isPattern ? 'default' : 'pointer')
+    .on('click', (ev, d) => {
+      if (d.isPattern) return;
+      openFragmentWithPatternsTabs(d.feature?.properties || {});
+    });
+
+  const label = svg.append('g')
+    .selectAll('text')
+    .data(nodes)
+    .enter().append('text')
+    .text(d => d.isPattern ? d.label : d.id)
+    .attr('font-size', d => d.isPattern ? 13 : 10)
+    .attr('fill', '#fff')
+    .attr('text-anchor', 'middle');
+
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(140).strength(0.7))
+    .force('charge', d3.forceManyBody().strength(-300))
+    .force('center', d3.forceCenter(w / 2, h / 2))
+    .force('collide', d3.forceCollide().radius(d => d.isPattern ? 32 : 16))
+    .on('tick', () => {
+      link
+        .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+
+      node.attr('cx', d => d.x).attr('cy', d => d.y);
+      label.attr('x', d => d.x).attr('y', d => d.y + (d.isPattern ? 40 : 22));
+    });
 }
 
 
@@ -2435,29 +6124,63 @@ function loadUnitsLocal() {
 }
 
 function ensureUnitMap() {
-  if (unitMap) { setTimeout(() => unitMap.invalidateSize(), 0); return unitMap; }
+  // 1) Si déjà créée : juste resize et retour
+  if (unitMap) {
+    setTimeout(() => unitMap.invalidateSize(), 0);
+    return unitMap;
+  }
 
-  unitMap = L.map('unit-view', { zoomControl:true, attributionControl:true })
-              .setView(montreuilView, montreuilZoom);
+  // 2) Créer la carte UNE SEULE FOIS
+  unitMap = L.map('unit-map', { zoomControl: true, attributionControl: true })
+    .setView(montreuilView, montreuilZoom);
 
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors, © CartoDB'
   }).addTo(unitMap);
 
+  // Groupes (toujours créés ici)
   unitContextGroup = L.layerGroup().addTo(unitMap);
   unitLayerGroup   = L.layerGroup().addTo(unitMap);
+  unitBuildingsLayer = L.layerGroup().addTo(unitMap);
 
-  // ⬇️ ICI : contour non interactif + au fond
-  fetch('data/contour.geojson').then(r => r.json()).then(contour => {
-    const contourLayer = L.geoJSON(contour, {
-      style: { color:'#919090', weight:2, opacity:0.8, fillOpacity:0 },
-      interactive: false              // ✅ ne capte plus les clics
-    }).addTo(unitContextGroup);
-    contourLayer.bringToBack();        // ✅ passe sous les unités
-  });
+
+  // Contour non interactif
+  fetch('data/contour.geojson')
+    .then(r => r.json())
+    .then(contour => {
+      const contourLayer = L.geoJSON(contour, {
+        style: { color: '#919090', weight: 2, opacity: 0.8, fillOpacity: 0 },
+        interactive: false
+      }).addTo(unitContextGroup);
+      contourLayer.bringToBack();
+    });
+
+
+  // Bâtiments (contexte visuel)
+  unitBuildingsLayer.clearLayers();
+  const bStyle = {
+  stroke: false,        
+  fill: true,
+  fillColor: '#b5b5b5', 
+  fillOpacity: 0.20    
+};
+
+  const buildingsVisible = [
+    ...(batimentsMontreuilGeojson || []),
+    ...(batimentsToulouseGeojson  || [])
+  ].filter(f => isFeatureInActiveZones(f));
+
+  if (buildingsVisible.length) {
+    L.geoJSON(
+      { type:'FeatureCollection', features: buildingsVisible },
+      { style: () => bStyle, interactive:false }
+    ).addTo(unitBuildingsLayer);
+  }
+
 
   return unitMap;
 }
+
 
 
 function renderAllUnits() {
@@ -2466,6 +6189,7 @@ function renderAllUnits() {
   const whiteStyle = { color:'#fff', weight:2, opacity:1, fillColor:'#fff', fillOpacity:0.25 };
   const units = loadUnitsLocal();
   let unionBounds = null;
+
 
   units.forEach(u => {
     const gj = L.geoJSON({ type:'Feature', geometry:u.geometry, properties:u.props }, {
@@ -2515,19 +6239,11 @@ function showUnitOnMap(unit) {
 }
 
 
+/* ==================================================
+   10/MODALES 3D ET STOCKAGE LOCAL
+================================================== */
 
-/*==================================================
-=     INSPECTEUR D’UNITÉ : V1 / V2 / COMPARER      =
-==================================================*/
 
-
-/* ========== MODALE UNITÉ (plein écran) ========== */
-let unitModalState = {
-  unit: null,
-  singleViewer: null,
-  v1Viewer: null,
-  v2Viewer: null,
-};
 
 function openUnitModal(unit) {
   unitModalState.unit = unit;
@@ -2771,6 +6487,428 @@ function promptImport3DForUnit(unitId, onLoaded) {
   input.click();
 }
 
+/* ==================================================
+   11/ PATTERNS SAUVEGARDES 
+================================================== */
+
+
+
+/*==================================================
+=               GESTION DES VUES (UI)              =
+==================================================*/
+
+function updateInterfaceElements(viewId) {
+  const legendBtn   = document.getElementById('toggle-legend-btn');
+  const locationBtn = document.getElementById('toggle-location-btn');
+
+
+const diffToggleBtn = document.getElementById('toggle-diffractions-btn');
+if (diffToggleBtn) diffToggleBtn.style.display = (viewId === 'proxemic') ? 'block' : 'none';
+
+
+  //  1) Affichage du contrôle bâtiments UNIQUEMENT sur Fragments (carte)
+  const buildingsBox = document.getElementById('buildings-style-box');
+  if (buildingsBox) {
+    buildingsBox.style.display = (viewId === 'map') ? 'block' : 'none';
+  }
+
+  // ✅ bouton "Critères actifs" visible sur : Carte (patterns-map), Proxémie, Galerie
+const wantsLegend =
+  viewId === 'fragment-proxemic' ||
+  viewId === 'proxemic' ||
+  viewId === 'gallery'  ||
+  viewId === 'patterns-map';
+
+  legendBtn.style.display   = wantsLegend ? 'block' : 'none';
+  locationBtn.style.display = (viewId === 'map' || viewId === 'patterns-map' || viewId === 'unit') ? 'block' : 'none';
+
+
+  // Slider agencements visible UNIQUEMENT sur la carte patterns-map
+const agCtrls = document.getElementById('agencement-controls');
+if (agCtrls) {
+  agCtrls.style.display = (viewId === 'patterns-map') ? 'block' : 'none';
+}
+
+const fragmentTimeBox = document.getElementById('fragment-time-controls');
+const fragmentTimeLegend = document.getElementById('fragment-time-legend');
+
+const showFragmentTimeControls =
+  viewId === 'map' || viewId === 'fragment-proxemic';
+
+if (fragmentTimeBox) {
+  fragmentTimeBox.style.display = showFragmentTimeControls ? 'flex' : 'none';
+}
+
+if (fragmentTimeLegend) {
+  fragmentTimeLegend.style.display =
+    (showFragmentTimeControls && currentFragmentTimeMode === 'trajectories') ? 'block' : 'none';
+}
+
+const patternGalleryTimeBox = document.getElementById('pattern-gallery-time-controls');
+if (patternGalleryTimeBox) {
+  patternGalleryTimeBox.style.display = (viewId === 'gallery') ? 'flex' : 'none';
+}
+
+}
+
+
+
+
+(function initBuildingsStyleRadiosOnce(){
+  const radios = document.querySelectorAll('input[name="buildings-style"]');
+  if (!radios.length) return;
+
+  radios.forEach(r => {
+    r.addEventListener('change', () => {
+      BUILDINGS_STYLE_MODE = r.value;
+      restyleBuildingsOnFragmentsMap();
+    });
+  });
+})();
+
+
+
+
+const topTabs = document.querySelectorAll('.top-tab');
+const subnav = document.getElementById('subnav-patterns');
+const subnavUnit = document.getElementById('subnav-unit');
+const subnavFragments = document.getElementById('subnav-fragments');
+const subTabs = document.querySelectorAll('.sub-tab');
+const fragmentSubTabs = document.querySelectorAll('.sub-tab-fragment');
+
+const VIEWS = {
+  fragments: {
+    map: 'map',
+    proxemic: 'fragment-proxemic-view'
+  },
+  unit: 'unit-view',
+  sub: {
+    'patterns-map': 'patterns-map',
+    'proxemic': 'proxemic-view',
+    'gallery': 'gallery-view',
+  }
+};
+
+function showView(viewId) {
+  document.querySelectorAll('.view').forEach(v => {
+    if (!v) return;
+    v.style.display = 'none';
+    v.classList.remove('active');
+  });
+
+  const target = document.getElementById(viewId);
+  if (target) {
+    target.style.display = 'block';
+    target.classList.add('active');
+  }
+
+  if (viewId === 'map' && map?.invalidateSize) {
+    setTimeout(() => map.invalidateSize(), 0);
+  }
+
+  if (viewId === 'patterns-map' && patternMap?.invalidateSize) {
+    setTimeout(() => patternMap.invalidateSize(), 0);
+  }
+
+  if (viewId === 'unit-view' && unitMap?.invalidateSize) {
+    setTimeout(() => unitMap.invalidateSize(), 0);
+  }
+}
+
+
+function setFragmentSubTab(name) {
+  currentFragmentSub = name;
+
+  fragmentSubTabs.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.fragmentSub === name);
+  });
+
+  if (name === 'map') {
+    currentView = 'map';
+    showView(VIEWS.fragments.map);
+  } else if (name === 'proxemic') {
+    currentView = 'fragment-proxemic';
+    showView(VIEWS.fragments.proxemic);
+    showFragmentProxemicView();
+  }
+
+  updateInterfaceElements(currentView);
+}
+
+
+function setTopTab(name) {
+  topTabs.forEach(btn => btn.classList.toggle('active', btn.dataset.top === name));
+
+  if (subnavFragments) {
+    subnavFragments.classList.toggle('subnav--inactive', name !== 'fragments');
+  }
+
+  if (name === 'fragments') {
+    subnav.classList.add('subnav--inactive');
+    if (subnavUnit) subnavUnit.classList.add('subnav--inactive');
+
+    subTabs.forEach(btn => btn.classList.remove('active'));
+
+    setFragmentSubTab(currentFragmentSub || 'map');
+  }
+
+  else if (name === 'patterns') {
+    subnav.classList.remove('subnav--inactive');
+    if (subnavUnit) subnavUnit.classList.add('subnav--inactive');
+    if (subnavFragments) subnavFragments.classList.add('subnav--inactive');
+
+    const currentActiveSub =
+      document.querySelector('.sub-tab.active')?.dataset.sub || 'proxemic';
+
+    setSubTab(currentActiveSub);
+  }
+
+  else if (name === 'unit') {
+    subnav.classList.add('subnav--inactive');
+    if (subnavFragments) subnavFragments.classList.add('subnav--inactive');
+    if (subnavUnit) subnavUnit.classList.remove('subnav--inactive');
+
+    subTabs.forEach(btn => btn.classList.remove('active'));
+
+    currentView = 'unit';
+    showView(VIEWS.unit);
+    ensureUnitMap();
+
+    if (!unitContext) renderAllUnits();
+
+    setUnitSubTab(currentUnitSub);
+    updateInterfaceElements(currentView);
+  }
+
+  if (unitCreation.active && name !== 'patterns') stopUnitCreation();
+}
+
+
+function setSubTab(subName) {
+  if (unitCreation.active) {
+  const ok =
+    (unitCreation.mode === 'map' && subName === 'patterns-map') ||
+    (unitCreation.mode === 'proxemic' && subName === 'proxemic');
+
+  if (!ok) stopUnitCreation();
+}
+
+  if (subName === 'proxemic') currentView = 'proxemic';
+  else if (subName === 'gallery') currentView = 'gallery';
+  else if (subName === 'patterns-map') currentView = 'patterns-map';
+
+  subTabs.forEach(btn => btn.classList.toggle('active', btn.dataset.sub === subName));
+  const viewId = VIEWS.sub[subName]; showView(viewId);
+
+  if (subName === 'patterns-map') {
+    initPatternMapOnce();
+    setTimeout(() => patternMap.invalidateSize(), 0);
+    renderPatternBaseGrey();
+    refreshPatternsMap();
+  }
+  if (subName === 'proxemic') showProxemicView();
+  else if (subName === 'gallery') showGalleryView();
+
+  updateInterfaceElements(currentView);
+}
+
+function setUnitSubTab(name) {
+  currentUnitSub = name;
+
+  const subBtns = document.querySelectorAll('.sub-tab-unit');
+  subBtns.forEach(b => b.classList.toggle('active', b.dataset.unitSub === name));
+
+  const elMap = document.getElementById('unit-map');
+  const elProx = document.getElementById('unit-proxemic');
+
+  if (!elMap || !elProx) return;
+
+  elMap.style.display = (name === 'map') ? 'block' : 'none';
+  elProx.style.display = (name === 'proxemic') ? 'block' : 'none';
+
+  if (name === 'map') {
+    ensureUnitMap();
+    setTimeout(() => unitMap?.invalidateSize?.(), 0);
+    // si on a un contexte, on le (re)rend
+    if (unitContext) renderUnitPatternContextOnUnitMap(unitContext.patternKey, unitContext.sourceFragmentId);
+  } else {
+    if (unitContext) renderUnitProxemicPattern(unitContext.patternKey, unitContext.sourceFragmentId);
+  }
+}
+
+// listeners (à faire une fois)
+(function initUnitSubnavOnce(){
+  const subnavUnit = document.getElementById('subnav-unit');
+  if (!subnavUnit) return;
+
+  subnavUnit.querySelectorAll('.sub-tab-unit').forEach(btn => {
+    btn.addEventListener('click', () => setUnitSubTab(btn.dataset.unitSub));
+  });
+})();
+
+
+
+// Listeners onglets
+topTabs.forEach(btn => btn.addEventListener('click', () => setTopTab(btn.dataset.top)));
+subTabs.forEach(btn => btn.addEventListener('click', () => setSubTab(btn.dataset.sub)));
+fragmentSubTabs.forEach(btn => {
+  btn.addEventListener('click', () => setFragmentSubTab(btn.dataset.fragmentSub));
+});
+
+// État initial
+setTopTab('fragments');
+setFragmentSubTab('map');
+restyleBuildingsOnFragmentsMap();
+
+
+/*==================================================
+=                 DOM                 =
+==================================================*/
+document.addEventListener('DOMContentLoaded', () => {
+  const infoBtn = document.getElementById('info-btn');
+  const aboutBox = document.getElementById('about');
+
+  function toggleAbout() {
+    const isOpen = aboutBox.style.display === 'block';
+    aboutBox.style.display = isOpen ? 'none' : 'block';
+    if (infoBtn) {
+      infoBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+    }
+  }
+
+  if (infoBtn) {
+    infoBtn.addEventListener('click', toggleAbout);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && aboutBox.style.display === 'block') {
+      toggleAbout();
+    }
+  });
+
+  document.querySelectorAll('.filter-zone').forEach(cb => {
+    cb.checked = true;
+  });
+
+  document.querySelectorAll('.crit-key').forEach(cb => {
+    cb.checked = true;
+  });
+
+  ACTIVE_CRITERIA_KEYS = new Set(ALL_CRITERIA_KEYS);
+  applyFilters();
+});
+
+
+/***************************************************
+=          SLIDER SEUIL DE SIMILARITÉ (FUZZY)      =
+***************************************************/
+
+function debounce(fn, delay = 160) {
+  let t;
+  return function (...args) {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+const sliderEl = document.getElementById('similarity-slider');
+const sliderValueEl = document.getElementById('slider-value');
+
+if (sliderEl && sliderValueEl) {
+  // Valeur initiale (75 → 0.75 par défaut)
+  const initial = parseInt(sliderEl.value, 10) / 100;
+  AG_SIM_THRESHOLD = initial;
+sliderValueEl.textContent = initial.toFixed(2);
+
+  sliderEl.addEventListener('input', debounce(e => {
+  const v = parseInt(e.target.value, 10);
+  AG_SIM_THRESHOLD = v / 100;
+  sliderValueEl.textContent = AG_SIM_THRESHOLD.toFixed(2);
+
+  // Recalcule sur zones actives (fragments + bâtiments)
+const { visibleFragments, visibleBuildings } = getVisibleSpatialFeaturesForPatterns();
+recomputeAgencementPatterns({ fragments: visibleFragments, buildings: visibleBuildings });
+
+  if (currentView === 'patterns-map') {
+    renderPatternBaseGrey();
+    refreshPatternsMap();
+  }
+}, 160));
+}
+
+/***************************************************
+=          SLIDER PERIMETRE     =
+***************************************************/
+
+
+const perimeterEl = document.getElementById('perimeter-slider');
+const perimeterValueEl = document.getElementById('perimeter-value');
+
+if (perimeterEl && perimeterValueEl) {
+  // init depuis l’attribut value HTML
+  PERIMETER_DIAMETER_M = parseInt(perimeterEl.value, 10) || PERIMETER_DIAMETER_M;
+  perimeterValueEl.textContent = String(PERIMETER_DIAMETER_M);
+
+  perimeterEl.addEventListener('input', debounce(e => {
+    const v = parseInt(e.target.value, 10);
+    if (!Number.isFinite(v)) return;
+
+    PERIMETER_DIAMETER_M = v;
+    perimeterValueEl.textContent = String(PERIMETER_DIAMETER_M);
+
+    // Recalcule sur zones actives (fragments + bâtiments)
+const { visibleFragments, visibleBuildings } = getVisibleSpatialFeaturesForPatterns();
+recomputeAgencementPatterns({ fragments: visibleFragments, buildings: visibleBuildings });
+
+    if (currentView === 'patterns-map') {
+      renderPatternBaseGrey();
+      refreshPatternsMap();
+    }
+  }, 160));
+}
+
+function refreshProxemicPreserveTransform() {
+  if (currentView !== "proxemic") return;
+
+  const svg = d3.select("#proxemic-view svg");
+  const world = svg.empty() ? null : svg.select("g");
+  const oldTransform = world ? world.attr("transform") : null;
+
+  showProxemicView();
+
+  if (oldTransform) {
+    const newSvg = d3.select("#proxemic-view svg");
+    const newWorld = newSvg.select("g");
+    if (!newWorld.empty()) newWorld.attr("transform", oldTransform);
+  }
+}
+
+const diffToggleBtn = document.getElementById("toggle-diffractions-btn");
+
+
+
+function syncDiffToggleUI() {
+  if (!diffToggleBtn) return;
+  diffToggleBtn.textContent = SHOW_DIFFRACTIONS ? "Masquer les diffractions" : "Afficher les diffractions";
+}
+
+if (diffToggleBtn) {
+  diffToggleBtn.addEventListener("click", () => {
+    SHOW_DIFFRACTIONS = !SHOW_DIFFRACTIONS;
+    syncDiffToggleUI();
+    refreshProxemicPreserveTransform(); // tu l’as déjà
+  });
+}
+syncDiffToggleUI();
+
+
+
+
+/*==================================================
+=     INSPECTEUR D’UNITÉ : V1 / V2 / COMPARER      =
+==================================================*/
+
+
 // Importer une V1 pour le fragment source d'une unité (depuis la modale Unité)
 function promptImportV1ForSourceFragment(fragmentId, onLoaded) {
   if (!fragmentId) return;
@@ -2797,8 +6935,6 @@ function promptImportV1ForSourceFragment(fragmentId, onLoaded) {
 /*==================================================
 =                 MODALE 3D (Three)                =
 ==================================================*/
-let activeViewer = null;
-let activeFragmentId = null;
 
 function openThreeModalForFragment(fragmentId) {
   if (!window.__ThreeFactory__) { console.error('Viewer 3D non chargé.'); return; }
@@ -2879,7 +7015,7 @@ function promptImport3DForFragment(fragmentId, reloadIfOpen=false) {
 /*==================================================
 =           SAVED PATTERNS (localStorage)          =
 ==================================================*/
-const SAVED_PATTERNS_KEY = 'savedPatternsV1';
+const SAVED_PATTERNS_KEY = 'savedPatternsV2';
 
 function loadSavedPatterns(){
   try { return JSON.parse(localStorage.getItem(SAVED_PATTERNS_KEY) || '[]'); }
@@ -3002,8 +7138,6 @@ function openPatternEditor(options) {
   modal.style.display = 'block';
 }
 
-
-
 /**
  * Calcule des critères "moyens" fuzzy pour une liste d'IDs de fragments.
  * Retourne un objet { cléFuzzy: valeurMoyenne } avec des nombres entre 0 et 1.
@@ -3035,36 +7169,79 @@ function computeConsensusCriteriaForIds(ids) {
   return consensus;
 }
 
+function computeTextConsensusForIds(ids, key, byIdFeatureMap, { minRatio = 1 } = {}) {
+  // minRatio=1 => strictement commun à TOUS les fragments du pattern
+  // (tu peux repasser à 0.7 plus tard si tu veux du "quasi commun")
 
+  const counts = new Map();
 
+  // IMPORTANT : on se base sur le nombre total de fragments du pattern
+  const total = ids.length;
+  if (!total) return [];
+
+  // Si un fragment n'a pas de valeur -> pas de consensus (car pas comparable)
+  for (const id of ids) {
+    const f = byIdFeatureMap.get(id);
+    if (!f) return [];
+    const arr = parseMultiText(f.properties?.[key]); // Array<string> | null
+    if (!arr || !arr.length) return [];             // <-- clé: bloque le consensus
+
+    const uniq = new Set(arr);
+    uniq.forEach(tok => counts.set(tok, (counts.get(tok) || 0) + 1));
+  }
+
+  const threshold = Math.max(1, Math.ceil(total * minRatio));
+
+  return Array.from(counts.entries())
+    .filter(([, c]) => c >= threshold)
+    .sort((a, b) => b[1] - a[1])
+    .map(([tok]) => tok);
+}
 
 /* --- Création : garde le même nom de fonction publique --- */
 function openSavePatternModal(patternKey, patternData) {
-  const els = (patternData?.elements || []).slice();
+  const occIds = (patternData?.occurrences || []).slice();
+  const occs = occIds.map(id => agencementsById.get(id)).filter(Boolean);
 
-  // ⇨ On calcule les critères fuzzy "moyens" au moment du snapshot
-  const consensus = computeConsensusCriteriaForIds(els);
+  const signature = computePatternSignatureFromOccurrences(occs);
+  const elements = computeFragmentsUnionFromOccurrences(occIds); // flatten fragments pour l’affichage
 
   openPatternEditor({
     mode: 'create',
     patternKey,
-    elements: els,
-    criteria: consensus,
+    elements,                  // on garde ce champ pour la UI (liste)
+    criteria: signature.numericMeans, // si tu veux continuer à afficher des “valeurs”
     name: (patternNames?.[patternKey]) || patternKey,
     description: '',
+    headerText: 'Enregistrer ce pattern (agencements)',
     onSave: (payload) => {
       const rec = {
         uid: 'sp_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7),
-        ...payload,
+
+        patternKey,
+        name: payload.name,
+        description: payload.description,
+
+        // ✅ vrai contenu du pattern
+        occurrences: occIds.slice(),
+
+        // ✅ “flatten” pour confort UI (photos, liste)
+        elements: elements.slice(),
+
+        // ✅ signature stable
+        signature,
+
+        // ✅ contexte de calcul (reproductible)
+        params: getCurrentPatternParams(),
+
         savedAt: new Date().toISOString()
       };
+
       addSavedPattern(rec);
-      // Ouvre directement la fiche du pattern enregistré
       openSavedPatternPanel(rec.uid);
     }
   });
 }
-
 
 /* --- Édition d’un pattern SAUVEGARDÉ (par UID) --- */
 function openEditSavedPatternModal(uid) {
@@ -3107,16 +7284,6 @@ function openEditSavedPatternModal(uid) {
 
 
 
-
-
-
-
-const savedListBtn = document.getElementById('saved-patterns-list-btn');
-if (savedListBtn) savedListBtn.addEventListener('click', () => openSavedPatternsListModal());
-
-
-
-
 function openSavedPatternsListModal(){
   const modal = document.getElementById('saved-patterns-list-modal');
   const body  = document.getElementById('splist-body');
@@ -3135,7 +7302,8 @@ function openSavedPatternsListModal(){
       h.textContent = `${rec.name}  (${rec.patternKey})`;
       const meta = document.createElement('div');
       meta.className = 'meta';
-      meta.textContent = `Enregistré: ${fmtDate(rec.savedAt)} • Fragments: ${rec.elements?.length || 0}`;
+      meta.textContent =
+  `Enregistré: ${fmtDate(rec.savedAt)} • Occurrences: ${rec.occurrences?.length || 0} • Fragments: ${rec.elements?.length || 0}`;
       const row = document.createElement('div');
       row.className = 'row';
 
@@ -3206,8 +7374,8 @@ function renderSavedPatternPanel(panel, rec) {
   const meta = document.createElement('div');
   meta.style.cssText = 'color:#aaa;font-size:12px;margin-bottom:8px';
   meta.textContent =
-    `ID: ${rec.patternKey} • Fragments: ${rec.elements?.length || 0} • Sauvé: ${fmtDate(rec.savedAt)}` +
-    (rec.updatedAt ? ` • Modifié: ${fmtDate(rec.updatedAt)}` : '');
+  `ID: ${rec.patternKey} • Occurrences: ${rec.occurrences?.length || 0} • Fragments: ${rec.elements?.length || 0} • Sauvé: ${fmtDate(rec.savedAt)}` +
+  (rec.updatedAt ? ` • Modifié: ${fmtDate(rec.updatedAt)}` : '');
   panel.appendChild(meta);
 
   /* --------------------------------------------
@@ -3221,8 +7389,9 @@ function renderSavedPatternPanel(panel, rec) {
      3) CRITÈRES COMMUNS (moyenne fuzzy)
         => comme dans renderPatternPanel
   -------------------------------------------- */
-  const ids = rec.elements || [];
-  const consensus = computeConsensusCriteriaForIds(ids);
+  const ids = rec.elements || []; // garde pour la liste des fragments plus bas
+const signature = rec.signature || { numericMeans: rec.criteria || {}, textTokens: {} };
+const consensus = signature.numericMeans || {};
 
   const critBlock = document.createElement('div');
   critBlock.className = 'pattern-crit-block';
@@ -3258,7 +7427,54 @@ function renderSavedPatternPanel(panel, rec) {
     });
   }
 
+  if (rec.params) {
+  const p = document.createElement('div');
+  p.style.cssText = 'color:#aaa;font-size:12px;margin:8px 0';
+  p.textContent = `Paramètres: diamètre ${rec.params.perimeterDiameterM}m • seuil ${Number(rec.params.agSimilarityThreshold).toFixed(2)} • zones ${((rec.params.zones||[]).join(', ') || '—')}`;
+  panel.appendChild(p);
+}
+
   panel.appendChild(critBlock);
+
+
+  const textSignature = signature.textTokens || {};
+
+const textBlock = document.createElement('div');
+textBlock.className = 'pattern-crit-block';
+
+const hText = document.createElement('h3');
+hText.textContent = 'Critères textuels';
+textBlock.appendChild(hText);
+
+let hasAnyText = false;
+
+Object.entries(textSignature).forEach(([k, arr]) => {
+  if (!arr || !arr.length) return;
+  hasAnyText = true;
+
+  const row = document.createElement('div');
+  row.className = 'crit-row';
+
+  const label = document.createElement('span');
+  label.className = 'crit-label';
+  label.textContent = prettyKey(k);
+
+  const val = document.createElement('span');
+  val.className = 'crit-value';
+  val.textContent = arr.slice(0, 10).join(', ') + (arr.length > 10 ? '…' : '');
+
+  row.append(label, val);
+  textBlock.appendChild(row);
+});
+
+if (!hasAnyText) {
+  const none = document.createElement('p');
+  none.textContent = 'Aucun critère textuel commun.';
+  none.style.color = '#aaa';
+  textBlock.appendChild(none);
+}
+
+panel.appendChild(textBlock);
 
   /* --------------------------------------------
      4) Liste des fragments membres
@@ -3325,3 +7541,96 @@ function renderSavedPatternPanel(panel, rec) {
 }
 
 
+
+
+/* ==================================================
+   BINDINGS UI FINAUX 
+================================================== */
+
+function updateFragmentTimeButtonsUI() {
+  document.querySelectorAll('.fragment-time-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.fragmentTime === currentFragmentTimeMode);
+  });
+
+  const legend = document.getElementById('fragment-time-legend');
+  if (legend) {
+    const showLegend =
+      currentFragmentTimeMode === 'trajectories' &&
+      (currentView === 'map' || currentView === 'fragment-proxemic');
+
+    legend.style.display = showLegend ? 'block' : 'none';
+  }
+}
+
+function setFragmentTimeMode(mode) {
+  currentFragmentTimeMode = mode;
+  updateFragmentTimeButtonsUI();
+
+  if (currentView === 'map') {
+    renderFragmentsMapByTimeMode();
+    restyleBuildingsOnFragmentsMap();
+  } else if (currentView === 'fragment-proxemic') {
+    showFragmentProxemicView();
+  }
+}
+
+
+document.querySelectorAll('.fragment-time-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    setFragmentTimeMode(btn.dataset.fragmentTime);
+  });
+});
+
+
+
+document.getElementById('toggle-legend-btn').addEventListener('click', () => {
+  const legend = document.getElementById('criteria-legend');
+  legend.style.display = (legend.style.display === 'none' || legend.style.display === '') ? 'block' : 'none';
+});
+
+
+document.querySelectorAll('.crit-key').forEach(cb => {
+  cb.addEventListener('change', () => {
+    const key = cb.dataset.key;
+    if (!key) return;
+
+    if (cb.checked) ACTIVE_CRITERIA_KEYS.add(key);
+    else ACTIVE_CRITERIA_KEYS.delete(key);
+
+    applyFilters();
+  });
+});
+
+document.querySelectorAll('.filter-zone').forEach(cb => {
+  cb.addEventListener('change', () => {
+    applyFilters();
+  });
+});
+
+
+const savedListBtn = document.getElementById('saved-patterns-list-btn');
+if (savedListBtn) savedListBtn.addEventListener('click', () => openSavedPatternsListModal());
+
+
+function updatePatternGalleryTimeButtonsUI() {
+  document.querySelectorAll('.pattern-gallery-time-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.patternGalleryTime === currentPatternGalleryTimeMode);
+  });
+}
+
+function setPatternGalleryTimeMode(mode) {
+  currentPatternGalleryTimeMode = mode;
+  updatePatternGalleryTimeButtonsUI();
+
+  if (currentView === 'gallery') {
+    showGalleryView();
+  }
+}
+
+document.querySelectorAll('.pattern-gallery-time-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    setPatternGalleryTimeMode(btn.dataset.patternGalleryTime);
+  });
+});
+
+updatePatternGalleryTimeButtonsUI();

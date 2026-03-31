@@ -39,8 +39,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 0.5,
-        "elements_spatiaux": "table, siganlétique, chaise"
+        "FS_P3_pressionfonciere": 0.5
       }
     },
     {
@@ -81,8 +80,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 0.5,
-        "elements_spatiaux": "table, sacs"
+        "FS_P3_pressionfonciere": 0.5
       }
     },
     {
@@ -123,8 +121,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 0.75,
-        "elements_spatiaux": "local, tables, signalétique"
+        "FS_P3_pressionfonciere": 0.75
       }
     },
     {
@@ -165,8 +162,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.5,
-        "FS_P3_pressionfonciere": 0.75,
-        "elements_spatiaux": "local, étals, tables"
+        "FS_P3_pressionfonciere": 0.75
       }
     },
     {
@@ -207,8 +203,7 @@
         "FS_P1_presenceinstitutionnelle": 1.0,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 1.0,
-        "elements_spatiaux": "mur de parpaing"
+        "FS_P3_pressionfonciere": 1.0
       }
     },
     {
@@ -277,8 +272,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "aucun"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -579,8 +573,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.5,
-        "FS_P3_pressionfonciere": 0.75,
-        "elements_spatiaux": "galerie"
+        "FS_P3_pressionfonciere": 0.75
       }
     },
     {
@@ -621,8 +614,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "marches"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -923,8 +915,7 @@
         "FS_P1_presenceinstitutionnelle": 1.0,
         "FS_P1_intensitecontrole": 0.25,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "local"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -1277,8 +1268,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "sol, bancs, préau"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -1333,8 +1323,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "chemin"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -1375,8 +1364,7 @@
         "FS_P1_presenceinstitutionnelle": 1.0,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.25,
-        "FS_P3_pressionfonciere": 1.0,
-        "elements_spatiaux": "local"
+        "FS_P3_pressionfonciere": 1.0
       }
     },
     {
@@ -1417,8 +1405,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.5,
-        "elements_spatiaux": "aucun"
+        "FS_P3_pressionfonciere": 0.5
       }
     },
     {
@@ -1459,8 +1446,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "cloisons, aménagements, parquet... divers"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -1521,8 +1507,7 @@
         "FS_P1_presenceinstitutionnelle": 1.0,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 1.0,
-        "elements_spatiaux": "locaux"
+        "FS_P3_pressionfonciere": 1.0
       }
     },
     {
@@ -1827,8 +1812,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.25,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bâtiment, parvis, trottoir"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -1869,8 +1853,7 @@
         "FS_P1_presenceinstitutionnelle": 1.0,
         "FS_P1_intensitecontrole": 0.5,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.5,
-        "elements_spatiaux": "bâtiment, parvis"
+        "FS_P3_pressionfonciere": 0.5
       }
     },
     {
@@ -1931,8 +1914,7 @@
         "FS_P1_presenceinstitutionnelle": 1.0,
         "FS_P1_intensitecontrole": 0.25,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "plantations, grilles"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -1993,8 +1975,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "plantations, grilles"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -2035,8 +2016,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.25,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "conteneur, préau, cuisine"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -2097,8 +2077,7 @@
         "FS_P1_presenceinstitutionnelle": 1.0,
         "FS_P1_intensitecontrole": 0.25,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "serre, plantations"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -2159,8 +2138,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.25,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "jardin, arbres, tables"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -2201,8 +2179,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.25,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "canapés, chaises"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -2503,8 +2480,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bancs, sol, herbe, arbres"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -2565,8 +2541,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "plantations, outils"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -2627,8 +2602,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "plantations, outils, bâches, cabanes"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -2669,8 +2643,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.25,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "local"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -2731,8 +2704,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bancs fabriqués, table, livres"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -2773,8 +2745,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "vérandas"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -3075,8 +3046,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "dalle, marches, équipements sportifs"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -3117,8 +3087,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "escaliers"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -3159,8 +3128,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.5,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "local"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -3461,8 +3429,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "local"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -3763,8 +3730,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "dalle, bancs, sol, trottoirs"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -3805,8 +3771,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.5,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "matelas, planches, tissus, bâches"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -3847,8 +3812,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.5,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "matelas, planches, tissus, bâches"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -3889,8 +3853,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "tissus, polystyrène, planches"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -3951,8 +3914,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.25,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "pelouse, grillages, équipement sportif"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -3993,8 +3955,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "grillage"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -4059,8 +4020,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "abris pour chats, arbres, sol, mur"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -4101,8 +4061,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.75,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "local"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -4403,8 +4362,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bancs, arbres, chaises, tables"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -4455,8 +4413,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "chemin"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -4517,8 +4474,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.75,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "eau, dalle, bordures"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -4579,8 +4535,7 @@
         "FS_P1_presenceinstitutionnelle": 0.5,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "constructions, potager, rangement"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -4621,8 +4576,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "rebord béton"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -4923,8 +4877,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "plateforme"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -4965,8 +4918,7 @@
         "FS_P1_presenceinstitutionnelle": 1.0,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 1.0,
-        "elements_spatiaux": "plaques de métal"
+        "FS_P3_pressionfonciere": 1.0
       }
     },
     {
@@ -5007,8 +4959,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 0.5,
-        "elements_spatiaux": "sol, murs, escaliers"
+        "FS_P3_pressionfonciere": 0.5
       }
     },
     {
@@ -5069,8 +5020,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 1.0,
-        "elements_spatiaux": "local, terrain, cabanes"
+        "FS_P3_pressionfonciere": 1.0
       }
     },
     {
@@ -5131,8 +5081,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bancs, tables, plateformes"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -5173,8 +5122,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "déchets, outils"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -5235,8 +5183,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "trottoir, terrasse, arbre"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -5277,8 +5224,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "escaliers"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -5337,8 +5283,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "grillage, portail"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -5399,8 +5344,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bancs, trottoir"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -5461,8 +5405,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bancs, tables, signalétique, arbres"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -5523,8 +5466,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "potager, barrières, signalétique"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -5585,8 +5527,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "terrain, barrières, équipement sportif"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -5627,8 +5568,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bancs"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -5689,8 +5629,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "dalle"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -5783,8 +5722,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "jeux pour enfants, bancs, clotures"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -5845,8 +5783,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.5,
-        "elements_spatiaux": "préfabriqué, local"
+        "FS_P3_pressionfonciere": 0.5
       }
     },
     {
@@ -5903,8 +5840,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "grillages, potagers, cabane"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -5945,8 +5881,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bancs, arbres"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -6007,8 +5942,7 @@
         "FS_P1_presenceinstitutionnelle": 1.0,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 1.0,
-        "elements_spatiaux": "grilles"
+        "FS_P3_pressionfonciere": 1.0
       }
     },
     {
@@ -6069,8 +6003,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "pergolas, trottoir"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -6111,8 +6044,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "cabanes a chats, jardin, arbres"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -6153,8 +6085,7 @@
         "FS_P1_presenceinstitutionnelle": 1.0,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 1.0,
-        "elements_spatiaux": "grille, signalétique, local"
+        "FS_P3_pressionfonciere": 1.0
       }
     },
     {
@@ -6213,8 +6144,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "grillage, portail"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -6269,8 +6199,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "grillage, portail"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -6329,8 +6258,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "grillage, portail"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -6391,8 +6319,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "préau, poteaux, banc"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -6453,8 +6380,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "plantations, clotures"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -6523,8 +6449,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "grillages, terrain, herbe"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -6565,8 +6490,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "barbecue, trottoir, herbe"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -6613,8 +6537,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "grillage, portail"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -6675,8 +6598,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "banc, jeux enfants, herbe"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -6717,8 +6639,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.5,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "déchets, grillage"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -6781,8 +6702,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "grillage"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -6823,8 +6743,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "pots de fleurs, grillage, outil, fontaine"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -6903,8 +6822,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "grillage, portail"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -6965,8 +6883,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.5,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bancs, arbres"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7007,8 +6924,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "jeux enfants, banc"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7069,8 +6985,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "tables, chaises, locaux"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7147,8 +7062,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "parvis, trottoir"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7189,8 +7103,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "tabourets, poteaux, sol, parvis"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7231,8 +7144,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "escaliers"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7293,8 +7205,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bancs, arbres, jeux pour enfants"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7335,8 +7246,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "table, bancs, chaises, arbre"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7377,8 +7287,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "troncs d'arbres"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7433,8 +7342,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "grillage, portail"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -7475,8 +7383,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "arbres, nourriture"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7523,8 +7430,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "chemin"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7565,8 +7471,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 0.5,
-        "elements_spatiaux": "mur de parpaing"
+        "FS_P3_pressionfonciere": 0.5
       }
     },
     {
@@ -7627,8 +7532,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "dalle, herbe, trottoirs"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7669,8 +7573,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "grillage"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7727,8 +7630,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bancs, arbres, sol"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7769,8 +7671,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "cabanes a chats, dalle"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7825,8 +7726,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "route"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -7867,8 +7767,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "plantations"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -7937,8 +7836,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "plantations, aérations"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -7985,8 +7883,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "dalle"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8027,8 +7924,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "préau, bancs"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8069,8 +7965,7 @@
         "FS_P1_presenceinstitutionnelle": 1.0,
         "FS_P1_intensitecontrole": 0.5,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "local"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8111,8 +8006,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "arbre, plaque commémorative"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8173,8 +8067,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "trottoirs, dalle, bancs"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8215,8 +8108,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "plaque métallique"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -8257,8 +8149,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "signalétique"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8299,8 +8190,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "table, bancs, arbre"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8361,8 +8251,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bancs, arbres, sol"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8431,8 +8320,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "penets, sols, bancs, jeux pour enfants"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8473,8 +8361,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "barrières"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8535,8 +8422,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bacs a plantes, arbres"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8597,8 +8483,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "barricade, dalle"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8639,8 +8524,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "pots de fleurs"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8681,8 +8565,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "jacuzzi"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8741,8 +8624,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.25,
-        "elements_spatiaux": "grillage, portail"
+        "FS_P3_pressionfonciere": 0.25
       }
     },
     {
@@ -8819,8 +8701,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "arbres, bancs, trottoirs, arbres, jeux pour enfants"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8861,8 +8742,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "pots de fleurs"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8923,8 +8803,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "herbe"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -8965,8 +8844,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "barbecue, bancs, arbres"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -9027,8 +8905,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "arbres, bancs"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -9069,8 +8946,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "structure, bancs"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -9111,8 +8987,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "aucun"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -9173,8 +9048,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 1.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "local"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -9215,8 +9089,7 @@
         "FS_P1_presenceinstitutionnelle": 0.0,
         "FS_P1_intensitecontrole": 0.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.0,
-        "elements_spatiaux": "bacs à plantes"
+        "FS_P3_pressionfonciere": 0.0
       }
     },
     {
@@ -9257,8 +9130,7 @@
         "FS_P1_presenceinstitutionnelle": 0.25,
         "FS_P1_intensitecontrole": 1.0,
         "FS_P2_abandon": 0.0,
-        "FS_P3_pressionfonciere": 0.5,
-        "elements_spatiaux": "arbres"
+        "FS_P3_pressionfonciere": 0.5
       }
     }
   ]

@@ -28,6 +28,12 @@
 
 </div>
 
+<!-- Sous-onglets : visible UNIQUEMENT quand "Fragments" est actif -->
+<div id="subnav-fragments" class="subnav subnav--inactive">
+  <button class="tab-btn sub-tab-fragment active" data-fragment-sub="map">Carte</button>
+  <button class="tab-btn sub-tab-fragment" data-fragment-sub="proxemic">Proxémie</button>
+</div>
+
 <!-- Sous-onglets : visible UNIQUEMENT quand "Patterns" est actif -->
 <div id="subnav-patterns" class="subnav subnav--inactive">
   <button class="tab-btn sub-tab" data-sub="patterns-map">Carte</button>
@@ -39,8 +45,19 @@
 </div>
 
 
+<!-- Sous-onglets : visible UNIQUEMENT quand "Unité de projet" est actif -->
+<div id="subnav-unit" class="subnav subnav--inactive">
+  <button class="tab-btn sub-tab-unit active" data-unit-sub="map">Carte</button>
+  <button class="tab-btn sub-tab-unit" data-unit-sub="proxemic">Proxémie</button>
+</div>
+
+
+
+
+
 <!-- VUES PRINCIPALES -->
 <div id="map" class="view active"><!-- ta carte Leaflet existante --></div>
+<div id="fragment-proxemic-view" class="view" style="display:none;"></div>
 <!-- (nouveau) Vue "Carte" de Patterns : vide pour l’instant -->
 <div id="patterns-map" class="view" style="display:none;"></div>
 
@@ -61,17 +78,19 @@
 <!-- Vue proxémie existante (ta “patterns/proxémie”) -->
 <div id="proxemic-view" class="view" style="display:none;"></div>
 <!-- Vue galerie existante -->
-<div id="gallery-view" class="view" style="display:none; position: absolute; top: 55px; left: 10px; /* pour ne pas passer sous les filtres */ right: 0; bottom: 0; background: white; overflow-y: auto; z-index: 100;     padding: 80px;     box-sizing: border-box; "></div>
-<!-- (nouveau) Vue "Unité de projet" : vide pour l’instant -->
-<div id="unit-view" class="view" style="display:none;"></div>
-
-<div id="similarity-controls" style="display:none; position: absolute; top: 90px; left: 50%; color: white; transform: translateX(-50%); background: rgb(0, 0, 0); padding: 10px; z-index: 1050; border: 1px solid #ccc;">
-  <label for="similarity-slider">
-    Seuil de similarité : <span id="slider-value">0.75</span>
-  </label><br>
-  <!-- 50 → 0.50, 95 → 0.95, valeur initiale 75 → 0.75 -->
-  <input type="range" id="similarity-slider" min="50" max="95" value="75" step="1">
+ <div id="gallery-view" class="view" style="display:none; position: absolute; top: 55px; left: 10px; right: 0; bottom: 0; background: white; overflow-y: auto; z-index: 100; padding: 80px; box-sizing: border-box;"></div>
+<div id="pattern-gallery-time-controls" class="fragment-time-controls">
+  <button class="fragment-time-btn pattern-gallery-time-btn active" data-pattern-gallery-time="T1">T1</button>
+  <button class="fragment-time-btn pattern-gallery-time-btn" data-pattern-gallery-time="T2">T2</button>
 </div>
+<!-- (nouveau) Vue "Unité de projet" -->
+<div id="unit-view" class="view" style="display:none; position:absolute; top:55px; left:0; right:0; bottom:0;">
+  <div id="unit-map" style="width:100%; height:100%;"></div>
+  <div id="unit-proxemic" style="width:100%; height:100%; display:none;"></div>
+</div>
+
+
+
 
 <div id="critical-view" style=" display: none; position: absolute;     top: 90px;     left: 50%;     transform: translateX(-50%);     width: 600px;    height: 600px;    background: white;    z-index: 100;    padding: 0;    box-sizing: border-box;     overflow: hidden;"> </div>
 
@@ -100,6 +119,21 @@
     <strong>Zones</strong><br>
 <label><input type="checkbox" class="filter-zone" value="montreuil" checked> Montreuil</label><br>
 <label><input type="checkbox" class="filter-zone" value="mirail" checked> Mirail</label><br>
+
+<hr style="border:0; border-top:1px solid #444; margin:10px 0;">
+
+<div id="buildings-style-box">
+  <strong>Bâtiments</strong><br>
+  <label>
+    <input type="radio" name="buildings-style" value="etat" checked>
+    Afficher par état
+  </label><br>
+  <label>
+    <input type="radio" name="buildings-style" value="fonction">
+    Afficher par fonction
+  </label>
+</div>
+
    </div>
 
    <!-- LEGENDE -->
@@ -107,6 +141,30 @@
 <div id="criteria-legend" style="position: absolute; display:none; bottom: 60px; left: 10px; width: 260px; background: white; border: 1px solid #ccc; padding: 10px; font-size: 12px; z-index: 1050; overflow-y: auto; max-height: 60vh;">
   <strong>Critères actifs</strong><br><br>
 
+  <div id="agencement-controls" style="margin-bottom:10px;">
+  <strong>Agencements</strong><br>
+
+  <label for="perimeter-slider">
+    Diamètre périmètre : <span id="perimeter-value">200</span> m
+  </label><br>
+  <input type="range" id="perimeter-slider" min="50" max="1200" value="200" step="10">
+
+  <div style="height:8px;"></div>
+
+  <label for="similarity-slider">
+    Seuil similarité : <span id="slider-value">0.75</span>
+  </label><br>
+  <input type="range" id="similarity-slider" min="50" max="95" value="75" step="1">
+
+  <hr style="border:0; border-top:1px solid #ddd; margin:10px 0;">
+</div>
+
+<strong>Data</strong><br>
+<label><input type="checkbox" class="crit-key" data-key="usages" checked> Usages</label><br>
+<label><input type="checkbox" class="crit-key" data-key="acteur_actif" checked> Acteur actif</label><br>
+<label><input type="checkbox" class="crit-key" data-key="initiateur" checked> Initiateur</label><br>
+<label><input type="checkbox" class="crit-key" data-key="elements_spatiaux" checked> Éléments spatiaux</label><br>
+<br>
   <strong>PA — Pratiques actives</strong><br>
   <em>Entretien/care</em><br>
   <label><input type="checkbox" class="crit-key" data-key="PA_P1_intensitesoin" checked> Intensité du soin</label><br>
@@ -139,14 +197,41 @@
   <strong>FS — Forces structurantes</strong><br>
   <em>Cadres de gouvernance</em><br>
   <label><input type="checkbox" class="crit-key" data-key="FS_P1_presenceinstitutionnelle" checked> Degré de présence institutionnelle</label><br>
-  <label><input type="checkbox" class="crit-key" data-key="FS_P1_intensitecontrole" checked> Intensité du contrôle</label><br>
+  <label><input type="checkbox" class="crit-key" data-key="FS_P1_intensitecontrole" checked> Intensité du contrôle</label><br><br>
   <em>Gestion de la vacance</em><br>
-  <label><input type="checkbox" class="crit-key" data-key="FS_P2_abandon" checked> Degré d'abandon</label><br>
+  <label><input type="checkbox" class="crit-key" data-key="FS_P2_abandon" checked> Degré d'abandon</label><br><br>
   <em>Economie de marché</em><br>
-  <label><input type="checkbox" class="crit-key" data-key="FS_P3_pressionfoncière" checked> Pression foncière</label><br>
+  <label><input type="checkbox" class="crit-key" data-key="FS_P3_pressionfoncière" checked> Pression foncière</label><br><br>
 </div>
 
 
+<div id="fragment-time-legend" class="fragment-time-legend">
+  <div>
+    <span style="display:inline-block;width:12px;height:12px;background:#ff0000;opacity:1;margin-right:4px;"></span>
+    <span style="display:inline-block;width:12px;height:12px;background:#0000ff;opacity:1;margin-right:6px;"></span>
+    Identiques
+  </div>
+  <div>
+    <span style="display:inline-block;width:12px;height:12px;background:#ffb0b0;margin-right:4px;"></span>
+    <span style="display:inline-block;width:12px;height:12px;background:#9ec5ff;margin-right:6px;"></span>
+    Modifiés
+  </div>
+  <div>
+    <span style="display:inline-block;width:12px;height:12px;background:#780101;margin-right:4px;"></span>
+    <span style="display:inline-block;width:12px;height:12px;background:#000075;margin-right:6px;"></span>
+    Apparus
+  </div>
+  <div>
+    <span style="display:inline-block;width:12px;height:12px;background:#d9d9d9;margin-right:6px;"></span>
+    Disparus
+  </div>
+</div>
+
+<div id="fragment-time-controls" class="fragment-time-controls">
+  <button class="fragment-time-btn active" data-fragment-time="T1">T1</button>
+  <button class="fragment-time-btn" data-fragment-time="T2">T2</button>
+  <button class="fragment-time-btn" data-fragment-time="trajectories">Trajectoires</button>
+</div>
 
 <button id="toggle-legend-btn" style="
     position: absolute;
@@ -168,6 +253,19 @@
   style="position:absolute; top:90px; right:10px; z-index:1050; background:#000; color:#fff; padding:10px; border:1px solid #fff; cursor:pointer; font-family:'Consolas', monospace;">
   Voir Toulouse
 </button>
+
+<button id="toggle-diffractions-btn" style="
+  position: absolute;
+  top: 90px;        /* ajuste (ex: 130, 140, 150...) */
+  right: 10px;
+  z-index: 1050;
+  background-color: #000;
+  color: white;
+  padding: 10px;
+  border: 1px solid white;
+  cursor: pointer;
+  font-family: 'Consolas', monospace;
+">Afficher les diffractions</button>
 
 
 <div id="about">
